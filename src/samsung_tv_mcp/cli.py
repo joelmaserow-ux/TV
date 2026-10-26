@@ -18,7 +18,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("diagnose", help="probe the TV and test pairing")
     sub.add_parser("pair", help="PIN-pair with TVs that use encrypted firmware")
-    sub.add_parser("install-claude", help="add this server to Claude Desktop's config")
+    sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
+        "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
     sub.add_parser("status")
     sub.add_parser("off")
     sub.add_parser("on")
@@ -52,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
                 out = tv.diagnose()
             case "install-claude":
                 from .install import install
-                out = install(tv.s.host)
+                out = install(tv.s.host, args.config)
             case "status":
                 out = tv.status()
             case "off":

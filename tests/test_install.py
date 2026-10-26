@@ -47,3 +47,22 @@ def test_prefers_folder_with_logs(tmp_path, monkeypatch):
     (live.parent / "logs").mkdir(parents=True)
     monkeypatch.setattr(install, "config_candidates", lambda: [stale, live])
     assert install.find_config() == live
+
+
+def test_prefers_claude_data_config(tmp_path, monkeypatch):
+    data = tmp_path / "Claude-Data" / "claude_x" / "claude_desktop_config.json"
+    data.parent.mkdir(parents=True)
+    data.write_text('{"preferences": {"a": 1}}')
+    live = tmp_path / "Claude" / "claude_desktop_config.json"
+    (live.parent / "logs").mkdir(parents=True)
+    monkeypatch.setattr(install, "config_candidates", lambda: [data, live])
+    assert install.find_config() == data
+    install.install("192.168.1.106")
+    merged = json.loads(data.read_text())
+    assert merged["preferences"] == {"a": 1} and "samsung-tv" in merged["mcpServers"]
+
+
+def test_explicit_config_path(tmp_path):
+    target = tmp_path / "x.json"
+    install.install("192.168.1.106", str(target))
+    assert "samsung-tv" in json.loads(target.read_text())["mcpServers"]

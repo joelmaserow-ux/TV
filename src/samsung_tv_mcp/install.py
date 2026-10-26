@@ -15,7 +15,9 @@ def config_candidates() -> list[Path]:
     home = Path.home()
     if sys.platform == "win32":
         local = Path(os.environ.get("LOCALAPPDATA", home / "AppData/Local"))
-        paths = [Path(os.environ.get("APPDATA", home / "AppData/Roaming")) / "Claude", local / "Claude"]
+        # Current Microsoft Store builds: what Settings > Developer > Edit config opens.
+        paths = sorted((local / "Claude-Data").glob("claude_*")) if (local / "Claude-Data").is_dir() else []
+        paths += [Path(os.environ.get("APPDATA", home / "AppData/Roaming")) / "Claude", local / "Claude"]
         # Older Microsoft Store installs keep it in a per-package folder.
         packages = local / "Packages"
         paths += sorted(packages.glob("Claude_*/LocalCache/Roaming/Claude")) if packages.exists() else []
@@ -26,8 +28,15 @@ def config_candidates() -> list[Path]:
     return [p / "claude_desktop_config.json" for p in paths]
 
 
-def find_config() -> Path:
+def find_config(override: str | None = None) -> Path:
+    if override:
+        return Path(override).expanduser()
     candidates = config_candidates()
+    # Settings > Developer > Edit config creates the file it reads, so an existing file in
+    # the newest-style location wins.
+    for path in candidates:
+        if path.exists() and "Claude-Data" in path.parts:
+            return path
     # The folder Claude Desktop actually runs from has its logs in it. Store installs can
     # leave a stale package folder behind (marked ".user-data-left..."), so check this first.
     for path in candidates:
@@ -42,8 +51,8 @@ def find_config() -> Path:
     return candidates[0]
 
 
-def install(host: str) -> str:
-    path = find_config()
+def install(host: str, config: str | None = None) -> str:
+    path = find_config(config)
     text = path.read_text(encoding="utf-8-sig") if path.exists() else ""
     try:
         config = json.loads(text) if text.strip() else {}

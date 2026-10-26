@@ -221,7 +221,11 @@ Set these in the `env` block of the MCP config (or export them before running `s
   for a fresh PIN. To re-pair from scratch, delete the `.samsung-tv-mcp` folder in your home folder.
 - **Volume control not found**: AllShare/DLNA is off. Turn it on (Step 1.3). `change_volume` and
   `mute` still work through remote keys.
-- **YouTube opens but the video doesn't play / YouTube won't open**: YouTube has been dropping old
+- **YouTube opens but says "This video is unavailable"**: the TV's YouTube app can't take a video
+  passed at launch. Link it once: on the TV open **YouTube → Settings → Link with TV code** (older
+  apps: **Pair device**), then run `samsung-tv youtube-link 123 456 789 012` with the code shown, or
+  ask Claude to link it. Afterwards `play_youtube` casts the way the phone app does.
+- **YouTube won't open at all**: YouTube has been dropping old
   Smart TV models. If the YouTube app doesn't work with the TV's own remote, it won't work here
   either. A Chromecast or Fire TV stick is the reliable fix.
 - **An app isn't found**: only apps that register with DIAL can be opened by name. For anything

@@ -8,6 +8,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings
+from . import youtube
 from .encrypted import EncryptedPairing, EncryptedRemote, credentials_path
 from .legacy import LegacyRemote, TVError
 from .power import cec_power_on, send_wol
@@ -209,9 +210,31 @@ class TV:
 
     def play_youtube(self, video: str) -> str:
         video_id, start = parse_youtube(video)
+        link = f"https://youtu.be/{video_id}{f'?t={start}' if start else ''}"
+        if youtube.is_linked(self.s.host):
+            self._ensure_youtube_open()
+            youtube.play(self.s.host, video_id, start)
+            return f"Playing {link} on the TV."
         params = f"v={video_id}" + (f"&t={start}" if start else "")
         self.dial.launch("YouTube", params)
-        return f"Playing https://youtu.be/{video_id}{f'?t={start}' if start else ''} on the TV."
+        return (
+            f"Asked the TV to play {link}. If the TV says 'This video is unavailable', its YouTube app "
+            "can't take videos this way: link it once with link_youtube (code from YouTube > Settings "
+            "> Link with TV code on the TV)."
+        )
+
+    def _ensure_youtube_open(self, wait: float = 25.0) -> None:
+        if self.dial.status("YouTube") != "running":
+            self.dial.launch("YouTube")
+        deadline = time.monotonic() + wait
+        while not youtube.is_online(self.s.host):
+            if time.monotonic() > deadline:
+                raise TVError("The TV's YouTube app opened but never came online for casting.")
+            time.sleep(2)
+
+    def link_youtube(self, code: str) -> str:
+        name = youtube.link(self.s.host, code)
+        return f"Linked to YouTube on {name}. play_youtube will now cast videos the way the phone app does."
 
     # --- diagnostics -------------------------------------------------------
 

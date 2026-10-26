@@ -17,7 +17,9 @@ from .tv import TV
 INSTRUCTIONS = """\
 Controls a Samsung UA55H6300 (2014 H-series, Orsay OS) Smart TV on the local network.
 - Turning the TV ON usually is not possible over the network on this model; power_on explains why.
-- To play a YouTube video you need its URL or id; find it first, then call play_youtube.
+- To play a YouTube video you need its URL or id; find it first, then call play_youtube. If the
+  TV shows 'This video is unavailable', ask the user for the code under YouTube > Settings >
+  Link with TV code on the TV and call link_youtube once.
 - Deep links into a specific show only work for YouTube. For other apps, open_app and then
   navigate with send_keys (KEY_UP/DOWN/LEFT/RIGHT, KEY_ENTER, KEY_RETURN).
 - Pairing: older firmwares show an Allow/Deny prompt on the first command; ask the user to press
@@ -112,6 +114,15 @@ async def close_app(app: str) -> str:
 async def play_youtube(video: str) -> str:
     """Play a YouTube video on the TV. Accepts a youtube.com / youtu.be URL (with optional ?t=) or an 11-char id."""
     return await run(tv().play_youtube, video)
+
+
+@mcp.tool()
+async def link_youtube(code: str) -> str:
+    """Link the TV's YouTube app once, using the code from YouTube > Settings > Link with TV code.
+
+    Needed when play_youtube opens YouTube but the TV says 'This video is unavailable'.
+    """
+    return await run(tv().link_youtube, code)
 
 
 @mcp.tool()

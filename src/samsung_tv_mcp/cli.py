@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     app.add_argument("--params", default="", help="raw DIAL launch string, e.g. 'v=VIDEO_ID'")
     sub.add_parser("app-info", help="show what the TV reports about an app").add_argument("name")
     sub.add_parser("youtube", help="play a YouTube URL or id").add_argument("video")
+    sub.add_parser("youtube-link", help="link with the code from YouTube > Settings > Link with TV code").add_argument("code", nargs="+")
     args = p.parse_args(argv)
 
     if args.host:
@@ -66,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
                 out = "\n".join(tv.dial.raw(args.name))
             case "youtube":
                 out = tv.play_youtube(args.video)
+            case "youtube-link":
+                out = tv.link_youtube(" ".join(args.code))
     except (TVError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

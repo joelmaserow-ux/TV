@@ -44,7 +44,7 @@ BUTTONS: list[Button] = [
     Button("KEY_CHDOWN", "Channel −", "the channel goes down", ("KEY_CHDOWN",)),
     Button("KEY_1", "Number keys", "it starts tuning to channel 1", ("KEY_1",)),
     Button("KEY_PAUSE", "Pause", "the video pauses", ("KEY_PAUSE", "KEY_PLAYPAUSE"),
-           "Start a YouTube video on the TV and let it play."),
+           "PLAY_VIDEO"),
     Button("KEY_PLAY", "Play", "the video plays again", ("KEY_PLAY", "KEY_PLAYPAUSE")),
     Button("KEY_FF", "Fast forward", "the video skips/scrubs forward", ("KEY_FF", "KEY_FF_", "KEY_RIGHT")),
     Button("KEY_REWIND", "Rewind", "the video skips/scrubs back", ("KEY_REWIND", "KEY_REWIND_", "KEY_LEFT")),

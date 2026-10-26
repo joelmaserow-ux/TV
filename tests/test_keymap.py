@@ -64,3 +64,15 @@ def test_retest_only_playback_and_typing(monkeypatch):
     assert tv.pressed == ["KEY_PAUSE"] and typed == ["abc"]
     assert data["keys"] == {"KEY_PAUSE": "KEY_PAUSE", "KEY_MENU": "KEY_MENU"}
     assert data["typing"] is True
+
+
+def test_playback_retest_starts_video_itself(monkeypatch):
+    monkeypatch.setattr(buttontest.time, "sleep", lambda s: None)
+    monkeypatch.setattr(buttontest.youtube, "is_linked", lambda host: True)
+    tv = FakeTV(set())
+    played = []
+    tv.play_youtube = lambda url: played.append(url) or "Playing it."
+    answers = iter(["y", "y"])  # video is playing, Pause works
+    data = buttontest.run(tv, ask=lambda q: next(answers), say=lambda s: None, only=["Pause"])
+    assert played == [buttontest.TEST_VIDEO]
+    assert data["keys"]["KEY_PAUSE"] == "KEY_PAUSE"

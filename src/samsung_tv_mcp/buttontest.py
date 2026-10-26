@@ -5,12 +5,28 @@ from __future__ import annotations
 import time
 from typing import Callable
 
-from . import keymap
+from . import keymap, youtube
 from .legacy import TVError
 from .text_input import type_text
 from .tv import TV
 
 APPS = ("YouTube", "Netflix")
+TEST_VIDEO = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"  # Big Buck Bunny, 10 minutes
+
+
+def _start_test_video(tv: TV, ask, say) -> None:
+    """Get a video playing for the playback buttons, without relying on anyone opening YouTube."""
+    if youtube.is_linked(tv.s.host):
+        say("\n>> Starting a test video on the TV (this can take up to 40 seconds)...")
+        try:
+            say("   " + tv.play_youtube(TEST_VIDEO))
+        except TVError as exc:
+            say(f"   Couldn't start it: {exc}")
+        if _yes_no(ask, "   Is a video playing on the TV now?") == "y":
+            return
+    say("\n>> Start any YouTube video on the TV with the TV remote and let it play.")
+    say("   If YouTube won't load, answer s to each playback button and retest them later.")
+    ask("   Press Enter when it's playing.")
 
 
 def _yes_no(ask: Callable[[str], str], question: str) -> str:
@@ -47,7 +63,9 @@ def run(tv: TV, ask: Callable[[str], str] = input, say: Callable[[str], None] = 
     for button in keymap.BUTTONS:
         if only and button.key.lower() not in wanted and button.label.lower() not in wanted:
             continue
-        if button.setup:
+        if button.setup == "PLAY_VIDEO":
+            _start_test_video(tv, ask, say)
+        elif button.setup:
             say(f"\n>> {button.setup}")
             ask("   Press Enter when ready.")
         result: str | None = None

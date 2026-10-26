@@ -12,11 +12,19 @@ def config_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
 
 
+async def _no_sleep(_):
+    pass
+
+
 class FakeApi:
     calls = []
+    drop = 0  # how many setPlaylist requests the "still loading" app ignores
+    reports = True  # whether the TV sends nowPlaying on connect
+    playing = None
 
-    def __init__(self):
+    def __init__(self, listener=None):
         self.screen_name = "Living Room TV"
+        self.listener = listener
 
     async def __aenter__(self):
         return self
@@ -41,14 +49,17 @@ class FakeApi:
         return True
 
     async def connect(self):
+        if self.listener and FakeApi.reports:
+            await self.listener.now_playing_changed(type("E", (), {"video_id": FakeApi.playing})())
         return True
 
     async def _command(self, command, params):
         FakeApi.calls.append(("play", params["videoId"]))
+        if FakeApi.drop:
+            FakeApi.drop -= 1
+        else:
+            FakeApi.playing = params["videoId"]
         return command == "setPlaylist" and params["videoIds"] == params["videoId"]
-
-    async def seek_to(self, t):
-        FakeApi.calls.append(("seek", t))
 
     async def disconnect(self):
         FakeApi.calls.append(("disconnect",))
@@ -56,17 +67,39 @@ class FakeApi:
 
 @pytest.fixture
 def fake_api(monkeypatch):
-    FakeApi.calls = []
+    FakeApi.calls, FakeApi.drop, FakeApi.reports, FakeApi.playing = [], 0, True, None
+    monkeypatch.setattr(youtube.asyncio, "sleep", _no_sleep)
     monkeypatch.setattr(youtube, "_api", FakeApi)
     return FakeApi
 
 
-def test_link_then_play(fake_api, tmp_path, monkeypatch):
-    monkeypatch.setattr(youtube.asyncio, "sleep", _no_sleep)
+def test_link_then_play(fake_api, tmp_path):
     assert youtube.link("1.2.3.4", "123 456 789 012") == "Living Room TV"
     assert json.loads((tmp_path / "1.2.3.4.youtube.json").read_text())["screenId"] == "abc"
-    youtube.play("1.2.3.4", "jNQXAC9IVRw")
-    assert fake_api.calls == [("pair", "123456789012"), ("load", "abc"), ("play", "jNQXAC9IVRw"), ("disconnect",)]
+    assert youtube.play("1.2.3.4", "jNQXAC9IVRw") is True
+    assert fake_api.calls == [("pair", "123456789012"), ("load", "abc"), ("play", "jNQXAC9IVRw"),
+                              ("disconnect",), ("disconnect",)]
+
+
+def test_play_resends_until_app_takes_it(fake_api):
+    youtube.link("1.2.3.4", "123456789012")
+    fake_api.drop = 2
+    assert youtube.play("1.2.3.4", "jNQXAC9IVRw") is True
+    assert [c for c in fake_api.calls if c[0] == "play"] == [("play", "jNQXAC9IVRw")] * 3
+
+
+def test_play_without_now_playing_reports_sends_once(fake_api):
+    youtube.link("1.2.3.4", "123456789012")
+    fake_api.reports = False
+    assert youtube.play("1.2.3.4", "jNQXAC9IVRw") is False
+    assert [c for c in fake_api.calls if c[0] == "play"] == [("play", "jNQXAC9IVRw")]
+
+
+def test_play_gives_up(fake_api):
+    youtube.link("1.2.3.4", "123456789012")
+    fake_api.drop = 99
+    with pytest.raises(youtube.TVError, match="kept ignoring"):
+        youtube.play("1.2.3.4", "jNQXAC9IVRw")
 
 
 def test_link_rejects_short_code():
@@ -74,12 +107,7 @@ def test_link_rejects_short_code():
         youtube.link("1.2.3.4", "12")
 
 
-async def _no_sleep(_):
-    pass
-
-
 def test_tv_uses_lounge_when_linked(fake_api, monkeypatch):
-    monkeypatch.setattr(youtube.asyncio, "sleep", _no_sleep)
     tv = TV(Settings(host="1.2.3.4", port=1, mac=None, client_name="t", client_id="t", use_cec=False,
                      timeout=1, rendering_control_url=None, dial_url="http://127.0.0.1:1/ws/app/"))
     youtube.link("1.2.3.4", "123456789012")

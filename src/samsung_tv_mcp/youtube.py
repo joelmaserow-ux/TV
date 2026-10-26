@@ -25,12 +25,33 @@ def is_linked(host: str) -> bool:
     return _auth_path(host).exists()
 
 
-def _api():
+def _api(listener=None):
     try:
         from pyytlounge import YtLoungeApi
     except ImportError as exc:
         raise TVError("YouTube linking needs the 'pyytlounge' package. Reinstall this project.") from exc
-    return YtLoungeApi(DEVICE_NAME, logger=_log)
+    return YtLoungeApi(DEVICE_NAME, event_listener=listener, logger=_log)
+
+
+class _NowPlaying:
+    """Records the nowPlaying event the TV sends when a remote connects."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.seen = False
+        self.video_id = None
+
+    async def now_playing_changed(self, event):
+        self.seen = True
+        self.video_id = event.video_id
+
+    def __getattr__(self, name):
+        # Every other EventListener callback: ignore.
+        async def _ignore(*_):
+            pass
+        return _ignore
 
 
 def _run(coro):
@@ -74,20 +95,45 @@ async def _is_online(host: str) -> bool:
         return await api.is_available()
 
 
-def play(host: str, video_id: str, start: int | None = None) -> None:
-    _run(_play(host, video_id, start))
+def play(host: str, video_id: str, start: int | None = None) -> bool:
+    """Cast a video. Returns True once the TV confirms it's playing it (False if it can't tell)."""
+    return _run(_play(host, video_id, start))
 
 
-async def _play(host: str, video_id: str, start: int | None) -> None:
-    async with _api() as api:
-        api.load_auth_state(json.loads(_auth_path(host).read_text()))
+async def _connect(api) -> None:
+    if not await api.connect():
         await api.refresh_auth()
         if not await api.connect():
-            await api.refresh_auth()
-            if not await api.connect():
-                raise TVError("Couldn't connect to the TV's YouTube app. Make sure it's open, or relink it.")
-        try:
-            # The full setPlaylist form the phone app sends; older TV apps ignore the bare one.
+            raise TVError("Couldn't connect to the TV's YouTube app. Make sure it's open, or relink it.")
+
+
+async def _disconnect(api) -> None:
+    try:
+        await api.disconnect()
+    except Exception:
+        pass
+
+
+async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) -> bool:
+    listener = _NowPlaying()
+    async with _api(listener) as api:
+        api.load_auth_state(json.loads(_auth_path(host).read_text()))
+        await api.refresh_auth()
+        for attempt in range(attempts + 1):
+            listener.reset()
+            await _connect(api)
+            if attempt:
+                if listener.video_id == video_id:
+                    await _disconnect(api)
+                    return True
+                if not listener.seen:
+                    # This TV doesn't report what it's playing; trust the first request.
+                    await _disconnect(api)
+                    return False
+            if attempt == attempts:
+                break
+            # A freshly opened app reports "online" while still loading and silently drops
+            # requests, so send, then reconnect to check, and resend until it sticks.
             ok = await api._command("setPlaylist", {
                 "videoId": video_id,
                 "videoIds": video_id,
@@ -99,11 +145,9 @@ async def _play(host: str, video_id: str, start: int | None) -> None:
                 "playerParams": "",
             })
             if not ok:
+                await _disconnect(api)
                 raise TVError("YouTube refused to start the video.")
-            # Disconnecting straight away can cancel the request on some TV apps.
-            await asyncio.sleep(3)
-        finally:
-            try:
-                await api.disconnect()
-            except Exception:
-                pass
+            await asyncio.sleep(5)
+            await _disconnect(api)
+        await _disconnect(api)
+        raise TVError("The TV's YouTube app kept ignoring the video. Try again in a few seconds.")

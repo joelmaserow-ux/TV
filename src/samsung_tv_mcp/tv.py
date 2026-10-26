@@ -213,8 +213,9 @@ class TV:
         link = f"https://youtu.be/{video_id}{f'?t={start}' if start else ''}"
         if youtube.is_linked(self.s.host):
             self._ensure_youtube_open()
-            youtube.play(self.s.host, video_id, start)
-            return f"Playing {link} on the TV."
+            if youtube.play(self.s.host, video_id, start):
+                return f"Playing {link} on the TV."
+            return f"Sent {link} to the TV's YouTube app (it doesn't confirm playback)."
         params = f"v={video_id}" + (f"&t={start}" if start else "")
         self.dial.launch("YouTube", params)
         return (
@@ -233,8 +234,8 @@ class TV:
                 raise TVError("The TV's YouTube app opened but never came online for casting.")
             time.sleep(2)
         if just_opened:
-            # "Online" comes before the app can actually take a video.
-            time.sleep(8)
+            # "Online" comes before the app can take a video; youtube.play also retries.
+            time.sleep(4)
 
     def link_youtube(self, code: str) -> str:
         name = youtube.link(self.s.host, code)

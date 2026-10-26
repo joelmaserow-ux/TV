@@ -58,6 +58,9 @@ class RemoteApp:
                         raise TVError("The button test found this TV doesn't accept typing.")
                     type_text(self.tv.s.host, str(body["text"])[:500], bool(body.get("submit")))
                     return "Typed."
+                case "search":
+                    from .youtube_search import search
+                    return json.dumps(search(str(body.get("query", ""))[:200]))
                 case "status":
                     return self.tv.status()
                 case "capabilities":

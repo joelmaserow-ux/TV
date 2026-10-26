@@ -83,3 +83,11 @@ def test_pin_persists(tmp_path, monkeypatch):
     first = webremote.load_pin("1.2.3.4")
     assert webremote.load_pin("1.2.3.4") == first
     assert webremote.load_pin("1.2.3.4", "4321") == "4321" == webremote.load_pin("1.2.3.4")
+
+
+def test_search_action(server, monkeypatch):
+    base, _ = server
+    import samsung_tv_mcp.youtube_search as ys
+    monkeypatch.setattr(ys, "search", lambda q: [{"id": "aqz-KE-bpKQ", "title": q, "channel": "c", "duration": "1:00"}])
+    code, data = post(base, {"action": "search", "query": "bunny"})
+    assert code == 200 and json.loads(data["message"])[0]["title"] == "bunny"

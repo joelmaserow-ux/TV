@@ -83,8 +83,11 @@ browser menu) so it opens like an app. Keep the window running; the computer mus
 - **Run `samsung-tv button-test` once.** It presses every remote button on the TV, asks whether
   it worked, tries alternative codes, and hides buttons the TV can't do. Retest single buttons
   with e.g. `samsung-tv button-test Off Pause`.
-- Typing uses the TV's port-8001 text API and is experimental on 2014/15 models. Test it with
-  `samsung-tv type "hello"` while a search box is open on the TV.
+- **Search YouTube** on the remote searches from the computer and shows results on your phone;
+  tap one to play it on the TV. No typing on the TV needed. (Claude can do the same with
+  `search_youtube`.)
+- Typing into the TV's own keyboard uses the port-8001 text API, which the UA55H6300 doesn't
+  support, so the button test hides it there.
 - For a remote that's always available, run it on an always-on machine such as a Raspberry Pi.
 
 ---

@@ -128,3 +128,10 @@ def test_reconnects_after_idle(fake_lib, monkeypatch):
     clock[0] += 100
     remote.send_keys(["KEY_UP"], 0)
     assert len(fake_lib.instances) == 2
+
+
+def test_close_shuts_the_kept_connection(fake_lib):
+    remote = EncryptedRemote("127.0.0.1", port=1234)
+    remote.send_keys(["KEY_UP"], 0)
+    remote.close()
+    assert fake_lib.instances[0].closed and remote._remote is None

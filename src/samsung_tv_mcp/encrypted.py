@@ -8,6 +8,7 @@ module adds pairing that survives restarts and a blocking API matching LegacyRem
 from __future__ import annotations
 
 import asyncio
+import atexit
 import json
 import os
 import socket
@@ -129,6 +130,7 @@ class EncryptedRemote:
     _web: object = field(default=None, init=False, repr=False)
     _creds: tuple | None = field(default=None, init=False, repr=False)
     _last_used: float = field(default=0.0, init=False, repr=False)
+    _close_registered: bool = field(default=False, init=False, repr=False)
     # socket.io sessions we don't heartbeat can go stale on the TV without closing cleanly.
     IDLE_RECONNECT = 45.0
 
@@ -178,6 +180,18 @@ class EncryptedRemote:
             await self._reset()
             raise
         self._remote, self._creds = remote, creds
+        if not self._close_registered:
+            self._close_registered = True
+            atexit.register(self.close)
+
+    def close(self) -> None:
+        """Close the kept-open TV connection (runs automatically at exit)."""
+        if self._remote is None and self._web is None:
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(self._reset(), _background_loop()).result(timeout=3)
+        except Exception:
+            pass
 
     async def _reset(self) -> None:
         remote, web = self._remote, self._web

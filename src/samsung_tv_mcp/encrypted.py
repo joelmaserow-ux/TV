@@ -11,7 +11,9 @@ import asyncio
 import json
 import os
 import socket
-from dataclasses import dataclass
+import threading
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .legacy import AuthPending, TVError, TVUnreachable, normalize_key
@@ -102,13 +104,37 @@ class EncryptedPairing:
         return token, session_id
 
 
+_loop: asyncio.AbstractEventLoop | None = None
+_loop_lock = threading.Lock()
+
+
+def _background_loop() -> asyncio.AbstractEventLoop:
+    """One long-lived event loop, so a TV connection can outlive a single call."""
+    global _loop
+    with _loop_lock:
+        if _loop is None:
+            _loop = asyncio.new_event_loop()
+            threading.Thread(target=_loop.run_forever, name="samsung-tv-encrypted", daemon=True).start()
+        return _loop
+
+
 @dataclass
 class EncryptedRemote:
     host: str
     port: int = 8000
     timeout: float = 5.0
+    # Reused across presses: this TV's companion service misbehaves when every key press
+    # opens and tears down its own socket.io session.
+    _remote: object = field(default=None, init=False, repr=False)
+    _web: object = field(default=None, init=False, repr=False)
+    _creds: tuple | None = field(default=None, init=False, repr=False)
+    _last_used: float = field(default=0.0, init=False, repr=False)
+    # socket.io sessions we don't heartbeat can go stale on the TV without closing cleanly.
+    IDLE_RECONNECT = 45.0
 
     def is_reachable(self, timeout: float | None = None) -> bool:
+        if self._remote is not None and self._remote.is_alive():
+            return True
         try:
             with socket.create_connection((self.host, self.port), timeout or self.timeout):
                 return True
@@ -126,22 +152,60 @@ class EncryptedRemote:
                 "This TV uses encrypted pairing and hasn't been paired yet. Run "
                 "`samsung-tv pair` (or ask Claude to pair with the TV) and enter the PIN shown on screen."
             )
-        if not self.is_reachable():
-            raise TVUnreachable(f"Cannot reach the TV at {self.host}:{self.port}. It is probably off.")
-        _run(self._send(normalized, creds, delay))
+        future = asyncio.run_coroutine_threadsafe(self._send(normalized, creds, delay), _background_loop())
+        try:
+            future.result(timeout=self.timeout * 2 + delay * len(normalized) + 5)
+        except TVError:
+            raise
+        except Exception as exc:
+            future.cancel()
+            raise TVUnreachable(
+                f"The TV's remote-control service at {self.host}:{self.port} isn't responding ({exc!r}). "
+                "If this keeps happening, unplug the TV at the wall for 30 seconds."
+            ) from exc
         return normalized
 
-    async def _send(self, keys: list[str], creds: tuple[str, str], delay: float) -> None:
-        aiohttp, _, Remote, SendRemoteKey = _imports()
+    async def _connect(self, creds: tuple[str, str], delay: float) -> None:
+        aiohttp, _, Remote, _ = _imports()
+        await self._reset()
         token, session_id = creds
-        async with aiohttp.ClientSession() as web:
-            remote = Remote(self.host, web_session=web, token=token, session_id=session_id,
-                            port=self.port, timeout=self.timeout, key_press_delay=delay)
+        self._web = aiohttp.ClientSession()
+        remote = Remote(self.host, web_session=self._web, token=token, session_id=session_id,
+                        port=self.port, timeout=self.timeout, key_press_delay=delay)
+        try:
+            await asyncio.wait_for(remote.start_listening(), self.timeout)
+        except BaseException:
+            await self._reset()
+            raise
+        self._remote, self._creds = remote, creds
+
+    async def _reset(self) -> None:
+        remote, web = self._remote, self._web
+        self._remote = self._web = self._creds = None
+        if remote is not None:
             try:
-                await asyncio.wait_for(remote.start_listening(), self.timeout)
-                await remote.send_commands([SendRemoteKey.click(k) for k in keys])
-            finally:
-                await remote.close()
+                await asyncio.wait_for(remote.close(), 3)
+            except Exception:
+                pass
+        if web is not None:
+            await web.close()
+
+    async def _send(self, keys: list[str], creds: tuple[str, str], delay: float) -> None:
+        _, _, _, SendRemoteKey = _imports()
+        commands = [SendRemoteKey.click(k) for k in keys]
+        for attempt in (1, 2):
+            stale = time.monotonic() - self._last_used > self.IDLE_RECONNECT
+            if self._remote is None or not self._remote.is_alive() or self._creds != creds or stale:
+                await self._connect(creds, delay)
+            try:
+                await self._remote.send_commands(commands, key_press_delay=delay)
+                self._last_used = time.monotonic()
+                return
+            except Exception:
+                # The TV drops idle sessions; reconnect once and resend.
+                await self._reset()
+                if attempt == 2:
+                    raise
 
     def send_key(self, key: str) -> str:
         return self.send_keys([key])[0]

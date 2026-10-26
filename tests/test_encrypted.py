@@ -27,34 +27,67 @@ def test_unpaired_send_explains_pairing():
         EncryptedRemote("127.0.0.1", port=1).send_key("KEY_MUTE")
 
 
-def test_send_keys_uses_library(monkeypatch):
-    sent = {}
+class FakeLibRemote:
+    instances = []
+    fail_next_send = False
 
-    class FakeRemote:
-        def __init__(self, host, **kw):
-            sent["init"] = (host, kw["token"], kw["session_id"], kw["port"])
+    def __init__(self, host, **kw):
+        self.args = (host, kw["token"], kw["session_id"], kw["port"])
+        self.keys = []
+        self.alive = False
+        self.closed = False
+        FakeLibRemote.instances.append(self)
 
-        async def start_listening(self):
-            pass
+    async def start_listening(self):
+        self.alive = True
 
-        async def send_commands(self, commands):
-            sent["keys"] = [c.body["param3"] for c in commands]
+    def is_alive(self):
+        return self.alive
 
-        async def close(self):
-            sent["closed"] = True
+    async def send_commands(self, commands, key_press_delay=None):
+        if FakeLibRemote.fail_next_send:
+            FakeLibRemote.fail_next_send = False
+            self.alive = False
+            raise ConnectionError("dropped")
+        self.keys += [c.body["param3"] for c in commands]
 
+    async def close(self):
+        self.closed = True
+        self.alive = False
+
+
+@pytest.fixture
+def fake_lib(monkeypatch):
     from samsungtvws.encrypted.remote import SendRemoteKey
     import aiohttp
 
-    monkeypatch.setattr(encrypted, "_imports", lambda: (aiohttp, None, FakeRemote, SendRemoteKey))
-    server = socket.create_server(("127.0.0.1", 0))
-    port = server.getsockname()[1]
+    FakeLibRemote.instances = []
+    FakeLibRemote.fail_next_send = False
+    monkeypatch.setattr(encrypted, "_imports", lambda: (aiohttp, None, FakeLibRemote, SendRemoteKey))
     save_credentials("127.0.0.1", "00" * 16, "7")
-    try:
-        assert EncryptedRemote("127.0.0.1", port=port).send_keys(["mute", "KEY_VOLUP"], 0) == ["KEY_MUTE", "KEY_VOLUP"]
-    finally:
-        server.close()
-    assert sent == {"init": ("127.0.0.1", "00" * 16, "7", port), "keys": ["KEY_MUTE", "KEY_VOLUP"], "closed": True}
+    return FakeLibRemote
+
+
+def test_send_keys_reuses_one_connection(fake_lib):
+    remote = EncryptedRemote("127.0.0.1", port=1234)
+    assert remote.send_keys(["mute", "KEY_VOLUP"], 0) == ["KEY_MUTE", "KEY_VOLUP"]
+    remote.send_keys(["KEY_UP"], 0)
+    remote.send_keys(["KEY_DOWN"], 0)
+    assert len(fake_lib.instances) == 1
+    conn = fake_lib.instances[0]
+    assert conn.args == ("127.0.0.1", "00" * 16, "7", 1234)
+    assert conn.keys == ["KEY_MUTE", "KEY_VOLUP", "KEY_UP", "KEY_DOWN"]
+    assert remote.is_reachable()
+
+
+def test_reconnects_when_tv_drops_the_session(fake_lib):
+    remote = EncryptedRemote("127.0.0.1", port=1234)
+    remote.send_keys(["KEY_UP"], 0)
+    fake_lib.fail_next_send = True
+    remote.send_keys(["KEY_DOWN"], 0)
+    assert len(fake_lib.instances) == 2
+    assert fake_lib.instances[0].closed
+    assert fake_lib.instances[1].keys == ["KEY_DOWN"]
 
 
 def test_library_encrypts_commands():
@@ -82,3 +115,16 @@ def test_remote_selection():
 def test_pin_validation():
     with pytest.raises(ValueError):
         encrypted.EncryptedPairing("127.0.0.1").finish("12a4")
+
+
+def test_reconnects_after_idle(fake_lib, monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(encrypted.time, "monotonic", lambda: clock[0])
+    remote = EncryptedRemote("127.0.0.1", port=1234)
+    remote.send_keys(["KEY_UP"], 0)
+    clock[0] += 10
+    remote.send_keys(["KEY_UP"], 0)
+    assert len(fake_lib.instances) == 1
+    clock[0] += 100
+    remote.send_keys(["KEY_UP"], 0)
+    assert len(fake_lib.instances) == 2

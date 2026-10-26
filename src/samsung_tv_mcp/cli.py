@@ -31,6 +31,8 @@ def main(argv: list[str] | None = None) -> int:
     nf.add_argument("profile")
     nf.add_argument("--wait", type=float, help="seconds Netflix needs to load before Exit (remembered)")
     nf.add_argument("--show", default="", help="search for this show/movie and open it")
+    nf.add_argument("--home-wait", type=float,
+                    help="seconds after picking the profile before going to Search (remembered)")
     nf.add_argument("--profile-wait", type=float,
                     help="seconds after reopening before choosing the profile (remembered)")
     sub.add_parser("netflix-search", help="with Netflix's home screen showing, search and open a show").add_argument("show")
@@ -87,12 +89,14 @@ def main(argv: list[str] | None = None) -> int:
                 out = "\n".join(f"{a['name']}  (samsung-tv app {a['id']})" for a in found) or "None found."
             case "netflix":
                 from . import netflix
-                if args.wait or args.profile_wait:
+                if args.wait or args.profile_wait or args.home_wait:
                     data = netflix.load(tv.s.host)
                     if args.wait:
                         data["startup_wait"] = args.wait
                     if args.profile_wait:
                         data["profile_wait"] = args.profile_wait
+                    if args.home_wait:
+                        data["home_wait"] = args.home_wait
                     netflix.save(tv.s.host, data)
                 out = netflix.watch(tv, args.profile, args.show)
             case "netflix-search":

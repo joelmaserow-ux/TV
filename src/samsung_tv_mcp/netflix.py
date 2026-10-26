@@ -21,25 +21,41 @@ def _path(host: str):
     return credentials_path(host).with_name(f"{host}.netflix.json")
 
 
+def defaults() -> dict:
+    return {
+        "profiles": list(DEFAULT_PROFILES),
+        "startup_wait": float(os.environ.get("SAMSUNG_TV_NETFLIX_STARTUP", "15")),
+        # The profile screen draws before it reacts to the remote, so give it longer.
+        "profile_wait": float(os.environ.get("SAMSUNG_TV_NETFLIX_PROFILE_WAIT", "20")),
+        "home_wait": 15.0,  # after picking a profile, until the home screen reacts to Left/Up
+        "keyboard_wait": 4.0,  # after opening Search, until the keyboard shows
+        "type_gap": 0.4,  # between key presses while typing
+    }
+
+
+# Earlier versions saved every default, so a saved value equal to an old default wasn't
+# chosen by anyone; drop it so the current default applies.
+_OLD_DEFAULTS = {"home_wait": 10.0}
+
+
 def load(host: str) -> dict:
     try:
-        data = json.loads(_path(host).read_text())
+        saved = json.loads(_path(host).read_text())
     except (OSError, ValueError):
-        data = {}
-    data.setdefault("profiles", list(DEFAULT_PROFILES))
-    data.setdefault("startup_wait", float(os.environ.get("SAMSUNG_TV_NETFLIX_STARTUP", "15")))
-    # The profile screen draws before it reacts to the remote, so give it longer.
-    data.setdefault("profile_wait", float(os.environ.get("SAMSUNG_TV_NETFLIX_PROFILE_WAIT", "20")))
-    data.setdefault("home_wait", 10.0)  # after picking a profile, until the home screen reacts
-    data.setdefault("keyboard_wait", 4.0)  # after opening Search, until the keyboard shows
-    data.setdefault("type_gap", 0.4)  # between key presses while typing
-    return data
+        saved = {}
+    for key, old in _OLD_DEFAULTS.items():
+        if saved.get(key) == old:
+            del saved[key]
+    return {**defaults(), **saved}
 
 
 def save(host: str, data: dict) -> None:
+    """Save only what differs from the defaults, so later default changes still apply."""
+    base = defaults()
+    changed = {k: v for k, v in data.items() if base.get(k) != v}
     path = _path(host)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+    path.write_text(json.dumps(changed, indent=2))
 
 
 def set_profiles(host: str, names: list[str]) -> list[str]:

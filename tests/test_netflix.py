@@ -179,3 +179,21 @@ def test_tv_that_never_reports_running_gets_one_exit(monkeypatch):
     netflix.open_as(tv, "Joel")
     presses = [e[1][0] for e in tv.events if e[0] == "press"]
     assert presses[:3] == ["KEY_EXIT", "KEY_RIGHT", "KEY_ENTER"] and presses[3] == "KEY_DOWN"
+
+
+def test_home_wait_is_15s_and_old_saved_default_is_ignored(tmp_path, monkeypatch):
+    import json
+    assert netflix.load("h")["home_wait"] == 15.0
+    # A file written by the old version saved every default, including home_wait 10.
+    (tmp_path / "h.netflix.json").write_text(json.dumps({"home_wait": 10.0, "profile_wait": 30}))
+    data = netflix.load("h")
+    assert data["home_wait"] == 15.0 and data["profile_wait"] == 30
+    netflix.save("h", data)
+    assert json.loads((tmp_path / "h.netflix.json").read_text()) == {"profile_wait": 30}
+
+
+def test_watch_waits_home_wait_before_search(monkeypatch):
+    slept = _fake_clock(monkeypatch)
+    tv = FakeTV()
+    netflix.watch(tv, "Ben", "rick")
+    assert 15.0 in slept

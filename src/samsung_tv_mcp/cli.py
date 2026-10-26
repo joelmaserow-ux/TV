@@ -24,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     typ = sub.add_parser("type", help="type text into the TV's on-screen keyboard")
     typ.add_argument("text")
     typ.add_argument("--enter", action="store_true", help="also finish/submit the text")
+    bt = sub.add_parser("button-test", help="check every remote button on the TV and remember what works")
+    bt.add_argument("only", nargs="*", help="retest just these buttons, e.g. Off Pause")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
     sub.add_parser("status")
@@ -65,6 +67,10 @@ def main(argv: list[str] | None = None) -> int:
                 from .text_input import type_text
                 type_text(tv.s.host, args.text, args.enter)
                 out = "Typed."
+            case "button-test":
+                from .buttontest import run as run_test
+                run_test(tv, only=args.only or None)
+                return 0
             case "install-claude":
                 from .install import install
                 out = install(tv.s.host, args.config)
@@ -83,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             case "mute":
                 out = tv.set_mute(None)
             case "key":
-                out = "Pressed " + ", ".join(tv.remote.send_keys(args.keys))
+                out = "Pressed " + ", ".join(tv.press(args.keys))
             case "app":
                 out = tv.open_app(args.name, args.params)
             case "app-info":

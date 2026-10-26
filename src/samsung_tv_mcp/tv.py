@@ -9,9 +9,9 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings
-from . import youtube
+from . import keymap, youtube
 from .encrypted import EncryptedPairing, EncryptedRemote, credentials_path
-from .legacy import LegacyRemote, TVError
+from .legacy import LegacyRemote, TVError, normalize_key
 from .power import cec_power_on, send_wol
 from .upnp import DIAL_ST, RENDERING_CONTROL, Dial, RenderingControl, ssdp_search
 
@@ -96,6 +96,11 @@ class TV:
             return self.encrypted
         return self.legacy
 
+    def press(self, keys: list[str], delay: float = 0.4) -> list[str]:
+        """Press buttons, using the codes the button test found for this TV."""
+        mapped = keymap.translate([normalize_key(k) for k in keys], keymap.load(self.s.host))
+        return self.remote.send_keys(mapped, delay=delay)
+
     def pair_start(self) -> str:
         if not _port_open(self.s.host, 8080):
             raise TVError("The TV's pairing service (port 8080) isn't answering. Make sure the TV is on.")
@@ -119,7 +124,7 @@ class TV:
     def power_off(self) -> str:
         if not self.is_on():
             return "The TV already looks off (it is not answering on the network)."
-        self.remote.send_key("KEY_POWEROFF")
+        self.press(["KEY_POWEROFF"])
         return "Sent power off."
 
     def power_on(self, wait: float = 20.0) -> str:
@@ -168,17 +173,17 @@ class TV:
         count = min(abs(int(steps)), 50)
         if count == 0:
             return "Nothing to do."
-        self.remote.send_keys([key] * count, delay=0.15)
+        self.press([key] * count, delay=0.15)
         return f"Volume {'up' if steps > 0 else 'down'} {count} step(s)."
 
     def set_mute(self, mute: bool | None) -> str:
         if mute is None:
-            self.remote.send_key("KEY_MUTE")
+            self.press(["KEY_MUTE"])
             return "Toggled mute."
         try:
             self.rendering.set_mute(mute)
         except TVError:
-            self.remote.send_key("KEY_MUTE")
+            self.press(["KEY_MUTE"])
             return "Toggled mute (exact mute state isn't available over UPnP on this TV)."
         return "Muted." if mute else "Unmuted."
 
@@ -187,14 +192,14 @@ class TV:
     def open_app(self, app: str, params: str = "") -> str:
         key = app.strip().lower()
         if key in KEY_APPS:
-            self.remote.send_keys(KEY_APPS[key])
+            self.press(KEY_APPS[key])
             return f"Opened {app}."
         name = APP_ALIASES.get(key, app.strip())
         try:
             self.dial.launch(name, params)
             return f"Launched {name}."
         except TVError as exc:
-            self.remote.send_key("KEY_CONTENTS")
+            self.press(["KEY_CONTENTS"])
             return (
                 f"Couldn't launch '{name}' directly ({exc}). Opened Smart Hub instead; use send_keys "
                 "with KEY_LEFT/RIGHT/UP/DOWN and KEY_ENTER to pick the app."

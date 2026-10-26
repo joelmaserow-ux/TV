@@ -135,7 +135,7 @@ async def send_keys(keys: list[str], delay_seconds: float = 0.4) -> str:
         return "No keys given."
     if len(keys) > 60:
         raise ToolError("Send at most 60 keys per call.")
-    sent = await run(tv().remote.send_keys, keys, max(0.1, min(delay_seconds, 5.0)))
+    sent = await run(tv().press, keys, max(0.1, min(delay_seconds, 5.0)))
     return "Pressed " + ", ".join(sent)
 
 

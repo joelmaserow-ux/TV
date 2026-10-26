@@ -80,6 +80,9 @@ browser menu) so it opens like an app. Keep the window running; the computer mus
 
 - The first time, Windows asks whether to let Python on the network: allow **Private networks**.
 - `--pin 1234` sets your own PIN (it's remembered); `--port` changes the port.
+- **Run `samsung-tv button-test` once.** It presses every remote button on the TV, asks whether
+  it worked, tries alternative codes, and hides buttons the TV can't do. Retest single buttons
+  with e.g. `samsung-tv button-test Off Pause`.
 - Typing uses the TV's port-8001 text API and is experimental on 2014/15 models. Test it with
   `samsung-tv type "hello"` while a search box is open on the TV.
 - For a remote that's always available, run it on an always-on machine such as a Raspberry Pi.

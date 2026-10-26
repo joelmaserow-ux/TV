@@ -14,6 +14,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import keymap
 from .config import Settings
 from .encrypted import credentials_path
 from .legacy import TVError, normalize_key
@@ -36,7 +37,7 @@ class RemoteApp:
             match action:
                 case "key":
                     keys = [normalize_key(k) for k in body.get("keys", [])][:20]
-                    self.tv.remote.send_keys(keys, delay=0.3)
+                    self.tv.press(keys, delay=0.3)
                     return ""
                 case "volume":
                     return self.tv.set_volume(int(body["level"]))
@@ -53,10 +54,19 @@ class RemoteApp:
                 case "youtube":
                     return self.tv.play_youtube(str(body["url"]))
                 case "text":
+                    if keymap.load(self.tv.s.host).get("typing") is False:
+                        raise TVError("The button test found this TV doesn't accept typing.")
                     type_text(self.tv.s.host, str(body["text"])[:500], bool(body.get("submit")))
                     return "Typed."
                 case "status":
                     return self.tv.status()
+                case "capabilities":
+                    data = keymap.load(self.tv.s.host)
+                    return json.dumps({
+                        "unsupported": keymap.unsupported(data),
+                        "apps": data.get("apps", {}),
+                        "typing": data.get("typing"),
+                    })
         raise ValueError(f"Unknown action {action!r}")
 
 
@@ -94,6 +104,8 @@ def make_handler(app: RemoteApp):
                 self._json(200, {"ok": True, "message": message})
             except (TVError, ValueError, KeyError) as exc:
                 self._json(200, {"ok": False, "message": str(exc)})
+            except Exception as exc:  # never leave a phone hanging on an unexpected error
+                self._json(500, {"ok": False, "message": f"Something went wrong: {type(exc).__name__}: {exc}"})
 
     return Handler
 

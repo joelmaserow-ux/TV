@@ -22,6 +22,10 @@ class FakeTV:
         self.remote = FakeRemote()
         self.s = type("S", (), {"host": "1.2.3.4"})()
 
+    def press(self, keys, delay=0.4):
+        from samsung_tv_mcp.legacy import normalize_key
+        return self.remote.send_keys([normalize_key(k) for k in keys], delay)
+
     def set_volume(self, level):
         return f"Volume set to {level}."
 

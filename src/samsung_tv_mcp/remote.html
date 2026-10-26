@@ -152,7 +152,7 @@
     </div>
   </section>
 
-  <section>
+  <section id="typeSection">
     <h2>Type on TV</h2>
     <form id="typeForm">
       <input id="typeText" type="text" placeholder="Text for the TV's keyboard" aria-label="Text to type" autocomplete="off">
@@ -219,6 +219,7 @@
     if (r.ok) {
       try { localStorage.setItem("tvPin", pin); } catch (e) {}
       $("lock").classList.add("hidden");
+      applyCapabilities();
       refresh();
     } else if (r.message === "Wrong PIN") {
       toast("Wrong PIN", true);
@@ -276,8 +277,26 @@
     if (on) refreshVolume();
   }
 
+  // Hide anything the button test found this TV doesn't do, so every visible button works.
+  async function applyCapabilities() {
+    const r = await call({ action: "capabilities" }, true);
+    if (!r.ok) return;
+    let caps;
+    try { caps = JSON.parse(r.message); } catch (e) { return; }
+    const bad = new Set(caps.unsupported || []);
+    document.querySelectorAll("[data-keys]").forEach((b) => {
+      if (b.dataset.keys.split(",").some((k) => bad.has(k))) b.classList.add("hidden");
+    });
+    if (bad.has("KEY_POWEROFF")) document.querySelector('[data-action="off"]').classList.add("hidden");
+    document.querySelectorAll("[data-app]").forEach((b) => {
+      if (caps.apps && caps.apps[b.dataset.app] === false) b.classList.add("hidden");
+    });
+    if (caps.typing === false) $("typeSection").classList.add("hidden");
+  }
+
   if (pin) {
     $("lock").classList.add("hidden");
+    applyCapabilities();
     refresh();
   } else {
     lock();

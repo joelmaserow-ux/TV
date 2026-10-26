@@ -238,14 +238,15 @@ def search(tv, title: str) -> str:
 def episode_steps(season: int, episode: int) -> list[tuple[list[str], str]]:
     """(presses, pause-setting) pairs from a show's page to playing season/episode.
 
-    On this TV: Down, Down, OK opens the episodes view; Left goes to the season list, which
+    On this TV: Down 7 (to the bottom of the show page's menu, wherever the highlight started),
+    Up 4 and OK lands on and opens the episodes view; Left goes to the season list, which
     starts on Season 1; Down to the season; Right lands on that season's first episode; Down
     to the episode; OK plays it.
     """
     if season < 1 or episode < 1:
         raise ValueError("Season and episode start at 1.")
     return [
-        (["KEY_DOWN", "KEY_DOWN", "KEY_ENTER"], "episodes_wait"),
+        (["KEY_DOWN"] * 7 + ["KEY_UP"] * 4 + ["KEY_ENTER"], "episodes_wait"),
         (["KEY_LEFT"], "step_wait"),
         (["KEY_DOWN"] * (season - 1) + ["KEY_RIGHT"], "season_wait"),
         (["KEY_DOWN"] * (episode - 1) + ["KEY_ENTER"], ""),

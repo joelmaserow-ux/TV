@@ -202,8 +202,10 @@ def test_watch_waits_home_wait_before_search(monkeypatch):
 def test_episode_steps():
     D, L, R, OK = "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT", "KEY_ENTER"
     steps = netflix.episode_steps(3, 5)
-    assert [k for k, _ in steps] == [[D, D, OK], [L], [D, D, R], [D, D, D, D, OK]]
-    assert [k for k, _ in netflix.episode_steps(1, 1)] == [[D, D, OK], [L], [R], [OK]]
+    U = "KEY_UP"
+    to_episodes = [D] * 7 + [U] * 4 + [OK]
+    assert [k for k, _ in steps] == [to_episodes, [L], [D, D, R], [D, D, D, D, OK]]
+    assert [k for k, _ in netflix.episode_steps(1, 1)] == [to_episodes, [L], [R], [OK]]
     with pytest.raises(ValueError):
         netflix.episode_steps(0, 1)
 

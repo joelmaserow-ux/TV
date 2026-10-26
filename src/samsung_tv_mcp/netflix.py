@@ -1,8 +1,8 @@
 """Open Netflix as a chosen profile by driving the profile screen with the remote.
 
-This TV's Netflix app ignores DIAL deep links, so everything happens with key presses:
-close Netflix so it starts fresh on "Choose a Profile", go to the top of the (vertical) list,
-step down to the profile, press OK.
+This TV's Netflix app ignores DIAL deep links, so everything happens with key presses: quit
+Netflix properly so it starts fresh on "Choose a Profile", reopen it, go to the top of the
+(vertical) list, step down to the profile, press OK.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import os
 import time
 
 from .encrypted import credentials_path
-from .legacy import TVError
 
 DEFAULT_PROFILES = ["Jad", "Bianca", "Lee", "Ben", "Joel"]
 
@@ -58,46 +57,30 @@ def profile_keys(profiles: list[str], name: str) -> list[str]:
     return ["KEY_UP"] * len(profiles) + ["KEY_DOWN"] * index + ["KEY_ENTER"]
 
 
-def _state(tv) -> str:
-    try:
-        return tv.dial.status("Netflix")
-    except TVError:
-        return "unknown"
+def _fully_exit(tv, wait: float) -> None:
+    """Quit Netflix for real so the next launch starts on "Choose a Profile".
 
-
-def _close(tv, timeout: float = 10.0) -> None:
-    """Fully close Netflix so it starts cold on the profile screen.
-
-    A Netflix that's only "hidden" in the background resumes straight into the last profile,
-    so stop it whatever state it reports and wait until the TV says it has stopped.
+    Neither DIAL's stop nor a bare Exit key really quits Netflix on this TV: Exit asks
+    "Are you sure you want to exit Netflix?", which needs Right then OK. Opening Netflix
+    first makes sure it's in front to receive that, whatever state it was in.
     """
-    try:
-        tv.dial.stop("Netflix")
-    except TVError:
-        pass
-    deadline = time.monotonic() + timeout
-    exited = False
-    while _state(tv) not in ("stopped", "not available"):
-        if time.monotonic() > deadline:
-            if exited:
-                raise TVError(
-                    "Couldn't close Netflix to get back to its profile screen. Close it with the "
-                    "TV remote (Exit), then try again."
-                )
-            # The TV didn't let DIAL close it: Exit closes the foreground app on this model.
-            exited = True
-            tv.press(["KEY_EXIT"])
-            deadline = time.monotonic() + 5
-        time.sleep(1)
-    time.sleep(2)  # let it finish shutting down before relaunching
+    tv._launch("Netflix")
+    time.sleep(wait)
+    tv.press(["KEY_EXIT"])
+    time.sleep(1.5)  # let the "Are you sure?" dialog appear
+    tv.press(["KEY_RIGHT"])
+    time.sleep(0.5)
+    tv.press(["KEY_ENTER"])
+    time.sleep(3)  # let it finish quitting before relaunching
 
 
 def open_as(tv, name: str) -> str:
     data = load(tv.s.host)
     keys = profile_keys(data["profiles"], name)
-    _close(tv)
+    wait = float(data["startup_wait"])
+    _fully_exit(tv, wait)
     tv._launch("Netflix")
-    time.sleep(float(data["startup_wait"]))
+    time.sleep(wait)
     tv.press(keys, delay=0.5)
     chosen = next(p for p in data["profiles"] if p.lower() == name.strip().lower())
     return f"Opened Netflix as {chosen}."

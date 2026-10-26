@@ -226,6 +226,18 @@ class Dial:
                 lines.append(f"{url} -> error: {exc}")
         return lines
 
+    def raw(self, name: str) -> list[str]:
+        """The TV's full DIAL description of an app at each candidate URL."""
+        out = []
+        for base in self._bases():
+            url = self._app(name, base)
+            try:
+                code, _, text = _http(url, timeout=self.timeout)
+                out.append(f"{url} -> HTTP {code}\n{text.strip()}")
+            except TVError as exc:
+                out.append(f"{url} -> {exc}")
+        return out
+
     def launch(self, name: str, params: str = "") -> str:
         """Start an app; returns the URL that worked."""
         errors = []

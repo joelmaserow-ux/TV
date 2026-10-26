@@ -27,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("key", help="press keys, e.g. KEY_MENU KEY_DOWN").add_argument("keys", nargs="+")
     app = sub.add_parser("app", help="open an app, e.g. YouTube")
     app.add_argument("name")
+    app.add_argument("--params", default="", help="raw DIAL launch string, e.g. 'v=VIDEO_ID'")
+    sub.add_parser("app-info", help="show what the TV reports about an app").add_argument("name")
     sub.add_parser("youtube", help="play a YouTube URL or id").add_argument("video")
     args = p.parse_args(argv)
 
@@ -59,7 +61,9 @@ def main(argv: list[str] | None = None) -> int:
             case "key":
                 out = "Pressed " + ", ".join(tv.remote.send_keys(args.keys))
             case "app":
-                out = tv.open_app(args.name)
+                out = tv.open_app(args.name, args.params)
+            case "app-info":
+                out = "\n".join(tv.dial.raw(args.name))
             case "youtube":
                 out = tv.play_youtube(args.video)
     except (TVError, ValueError) as exc:

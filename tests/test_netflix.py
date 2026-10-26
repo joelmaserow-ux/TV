@@ -103,9 +103,19 @@ def test_watch_opens_profile_then_searches(monkeypatch):
     assert "Ben" in msg and "rick and morty" in msg
     presses = [e[1][0] for e in tv.events if e[0] == "press"]
     after_profile = presses[presses.index("KEY_ENTER", 4) + 1:]  # first OK after the exit dialog is the profile pick
+    typing = netflix.type_keys("rick and morty")
+    finish = netflix.to_first_result((4, 0))  # ends on "y"
     assert after_profile[:3] == netflix.TO_SEARCH
-    assert after_profile[3:-15] == netflix.type_keys("rick and morty")
-    assert after_profile[-15:] == netflix.TO_FIRST_RESULT
+    assert after_profile[3:3 + len(typing)] == typing
+    assert after_profile[3 + len(typing):] == finish
+
+
+def test_to_first_result_goes_via_space_and_backspace():
+    U, L, R, OK = "KEY_UP", "KEY_LEFT", "KEY_RIGHT", "KEY_ENTER"
+    # From "y" (row 4, col 0): up 4 to "a", up onto Space, right to Backspace, right to the result.
+    assert netflix.to_first_result((4, 0)) == [U] * 4 + [U, R, R, OK]
+    # From "x" (row 3, col 5): left 5, up 3, then the same.
+    assert netflix.to_first_result((3, 5)) == [L] * 5 + [U] * 3 + [U, R, R, OK]
 
 
 def test_watch_without_title_just_opens_profile(monkeypatch):

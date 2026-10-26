@@ -127,8 +127,8 @@ def _moves(start: tuple[int, int], end: tuple[int, int]) -> list[str]:
     return horizontal + vertical
 
 
-def type_keys(text: str) -> list[str]:
-    """Presses that type `text`, starting with the highlight on "a"."""
+def _type(text: str) -> tuple[list[str], tuple[int, int]]:
+    """Presses that type `text` from "a", and where the highlight ends up."""
     pos = (0, 0)
     keys: list[str] = []
     for ch in normalize_title(text):
@@ -141,12 +141,25 @@ def type_keys(text: str) -> list[str]:
             target = _find(ch)
             keys += _moves(pos, target) + ["KEY_ENTER"]
             pos = target
-    return keys
+    return keys, pos
 
 
-# From the home screen to the search keyboard, and from the keyboard to the first result.
+def type_keys(text: str) -> list[str]:
+    """Presses that type `text`, starting with the highlight on "a"."""
+    return _type(text)[0]
+
+
+def to_first_result(pos: tuple[int, int]) -> list[str]:
+    """From the last typed key to the first search result, without leaving the keyboard.
+
+    Up from the "a" column onto Space (not pressed), Right onto Backspace, Right onto the
+    first result. Going out to the left menu and back lands on Space unpredictably instead.
+    """
+    return _moves(pos, (0, 0)) + ["KEY_UP", "KEY_RIGHT", "KEY_RIGHT", "KEY_ENTER"]
+
+
+# From the home screen to the search keyboard.
 TO_SEARCH = ["KEY_LEFT", "KEY_UP", "KEY_ENTER"]
-TO_FIRST_RESULT = ["KEY_LEFT"] * 7 + ["KEY_RIGHT"] * 7 + ["KEY_ENTER"]
 
 
 def _press_slowly(tv, keys: list[str], gap: float) -> None:
@@ -163,9 +176,10 @@ def search(tv, title: str) -> str:
         raise ValueError("Type the name of a show or movie.")
     _press_slowly(tv, TO_SEARCH, 0.8)
     time.sleep(float(data.get("keyboard_wait", 4)))
-    _press_slowly(tv, type_keys(typed), float(data.get("type_gap", 0.4)))
+    keys, end = _type(typed)
+    _press_slowly(tv, keys, float(data.get("type_gap", 0.4)))
     time.sleep(2)  # let the results update after the last letter
-    _press_slowly(tv, TO_FIRST_RESULT, 0.5)
+    _press_slowly(tv, to_first_result(end), 0.6)
     return f"Searched Netflix for “{typed}” and opened the first result."
 
 

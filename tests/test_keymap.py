@@ -51,3 +51,16 @@ def test_button_test_learns_alternatives(monkeypatch):
     assert data["apps"] == {"YouTube": True, "Netflix": False}
     assert data["typing"] is False
     assert keymap.load("1.2.3.4") == data
+
+
+def test_retest_only_playback_and_typing(monkeypatch):
+    monkeypatch.setattr(buttontest.time, "sleep", lambda s: None)
+    typed = []
+    monkeypatch.setattr(buttontest, "type_text", lambda host, text, *a: typed.append(text))
+    keymap.save("1.2.3.4", {"keys": {"KEY_PAUSE": None, "KEY_MENU": "KEY_MENU"}, "typing": False})
+    tv = FakeTV(set())
+    answers = iter(["", "y", "y", "y"])  # setup Enter, Pause works, keyboard showing, abc appeared
+    data = buttontest.run(tv, ask=lambda q: next(answers), say=lambda s: None, only=["Pause", "typing"])
+    assert tv.pressed == ["KEY_PAUSE"] and typed == ["abc"]
+    assert data["keys"] == {"KEY_PAUSE": "KEY_PAUSE", "KEY_MENU": "KEY_MENU"}
+    assert data["typing"] is True

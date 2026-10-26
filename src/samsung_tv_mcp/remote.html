@@ -193,6 +193,17 @@
       </div>
     </details>
   </section>
+  <section>
+    <details>
+      <summary>Fix YouTube ▾</summary>
+      <p class="hint" style="margin-top:0">If videos stop starting from this remote: on the TV open YouTube →
+        Settings → <b>Link with TV code</b>, then enter the code here.</p>
+      <form id="linkForm">
+        <input id="linkCode" inputmode="numeric" placeholder="123 456 789 012" aria-label="YouTube TV code" autocomplete="off">
+        <button type="submit">Link</button>
+      </form>
+    </details>
+  </section>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -271,6 +282,14 @@
     toast("Sending to the TV… this can take up to 30 seconds");
     const r = await call({ action: "youtube", url });
     if (r.ok) $("ytUrl").value = "";
+  });
+
+  $("linkForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = $("linkCode").value.trim();
+    if (!code) return;
+    const r = await call({ action: "youtube_link", code });
+    if (r.ok) $("linkCode").value = "";
   });
 
   $("searchForm").addEventListener("submit", async (e) => {

@@ -91,3 +91,9 @@ def test_search_action(server, monkeypatch):
     monkeypatch.setattr(ys, "search", lambda q: [{"id": "aqz-KE-bpKQ", "title": q, "channel": "c", "duration": "1:00"}])
     code, data = post(base, {"action": "search", "query": "bunny"})
     assert code == 200 and json.loads(data["message"])[0]["title"] == "bunny"
+
+
+def test_youtube_link_action(server):
+    base, tv = server
+    tv.link_youtube = lambda code: f"Linked {code}"
+    assert post(base, {"action": "youtube_link", "code": "123 456"})[1] == {"ok": True, "message": "Linked 123 456"}

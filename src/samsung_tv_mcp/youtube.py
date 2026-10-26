@@ -14,6 +14,11 @@ from .encrypted import credentials_path
 from .legacy import TVError
 
 DEVICE_NAME = "Claude TV Remote"
+RELINK_HINT = (
+    "If YouTube is open on the TV and showing its home screen, the link to it has probably been "
+    "reset: on the TV open YouTube > Settings > Link with TV code, then run "
+    "`samsung-tv youtube-link <code>` (or tell Claude the code)."
+)
 _log = logging.getLogger(__name__)
 
 
@@ -111,7 +116,7 @@ async def _connect(api) -> None:
     if not await api.connect():
         await api.refresh_auth()
         if not await api.connect():
-            raise TVError("Couldn't connect to the TV's YouTube app. Make sure it's open, or relink it.")
+            raise TVError(RELINK_HINT)
 
 
 async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) -> bool:
@@ -148,4 +153,4 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
             if not ok:
                 raise TVError("YouTube refused to start the video.")
             await asyncio.sleep(5)
-        raise TVError("The TV's YouTube app kept ignoring the video. Try again in a few seconds.")
+        raise TVError("The TV's YouTube app kept ignoring the video. " + RELINK_HINT)

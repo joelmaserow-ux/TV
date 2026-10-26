@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import socket
@@ -35,6 +36,8 @@ KEY_APPS = {
     "settings": ["KEY_MENU"],
     "menu": ["KEY_MENU"],
 }
+
+_log = logging.getLogger(__name__)
 
 YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
@@ -278,10 +281,10 @@ class TV:
         while not youtube.is_online(self.s.host):
             waited = time.monotonic() - start
             if waited > wait:
-                raise TVError(
-                    "The TV's YouTube app opened but never became ready for videos. If it's showing "
-                    "an account picker or a sign-in screen, choose an account with the remote and try again."
-                )
+                # YouTube's "is this screen online" answer can be stale (e.g. after the TV was
+                # unplugged), so don't give up on it alone: try sending the video anyway.
+                _log.info("YouTube never reported the TV online; trying to cast anyway")
+                return
             if just_opened and not picked and waited >= self.PICK_ACCOUNT_AFTER:
                 picked = True
                 try:

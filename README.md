@@ -65,6 +65,27 @@ After an update to this repo, run any command once with `uvx --refresh --from $t
 
 ---
 
+## Family remote (phones and laptops)
+
+A web remote anyone on your home Wi-Fi can use: power off, volume, arrows/OK, playback, apps,
+"paste a YouTube link", and typing into the TV's keyboard.
+
+```powershell
+uvx --from $tv samsung-tv remote
+```
+
+It prints an address like `http://192.168.1.50:8765` and a 4-digit PIN. Open the address on each
+phone or laptop, enter the PIN once, and use **Add to Home Screen** (iPhone: Share menu; Android:
+browser menu) so it opens like an app. Keep the window running; the computer must be on.
+
+- The first time, Windows asks whether to let Python on the network: allow **Private networks**.
+- `--pin 1234` sets your own PIN (it's remembered); `--port` changes the port.
+- Typing uses the TV's port-8001 text API and is experimental on 2014/15 models. Test it with
+  `samsung-tv type "hello"` while a search box is open on the TV.
+- For a remote that's always available, run it on an always-on machine such as a Raspberry Pi.
+
+---
+
 ## Step-by-step installation (manual)
 
 You need a computer that **stays on the same home network as the TV**: a Mac, a Windows PC, or a

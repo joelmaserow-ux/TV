@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>TV Remote</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --panel: #ffffff; --btn: #e8eaee; --btn-press: #d5d9e0;
+    --text: #15171c; --muted: #6b7280; --accent: #2563eb; --accent-text: #fff;
+    --danger: #dc2626; --ok: #16a34a; --ring: rgba(37, 99, 235, .35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d11; --panel: #15181e; --btn: #232831; --btn-press: #313844;
+      --text: #eef0f4; --muted: #9aa3b2; --accent: #4f8bff; --accent-text: #fff;
+      --danger: #ef4444; --ok: #22c55e; --ring: rgba(79, 139, 255, .4);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 440px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--danger); }
+  section { background: var(--panel); border-radius: 18px; padding: 14px; margin-bottom: 12px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 0 0 10px; font-weight: 600; }
+  .row { display: grid; gap: 10px; grid-template-columns: repeat(var(--cols, 3), 1fr); }
+  .row + .row { margin-top: 10px; }
+  button { appearance: none; border: 0; border-radius: 14px; background: var(--btn); color: var(--text);
+    font: inherit; font-weight: 600; min-height: 52px; padding: 8px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px; touch-action: manipulation;
+    transition: background .08s, transform .08s; user-select: none; }
+  button:active { background: var(--btn-press); transform: scale(.97); }
+  button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-text); }
+  button.danger { background: var(--danger); color: #fff; }
+  button.small { min-height: 44px; font-size: 15px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 76px); grid-template-rows: repeat(3, 76px);
+    gap: 10px; justify-content: center; }
+  .pad button { min-height: 0; font-size: 22px; }
+  .pad .ok { border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 17px; }
+  .vol { display: grid; grid-template-columns: 56px 1fr 56px; gap: 10px; align-items: center; }
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
+  .vol-label { text-align: center; color: var(--muted); font-size: 14px; margin-top: 6px; }
+  form { display: flex; gap: 8px; }
+  form + form { margin-top: 10px; }
+  input[type=text], input[type=url], input[type=password], input[inputmode] {
+    flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--btn);
+    border: 2px solid transparent; border-radius: 12px; padding: 12px; }
+  input:focus { outline: none; border-color: var(--accent); }
+  form button { min-width: 84px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+  .hidden { display: none !important; }
+  #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(120%); max-width: calc(100% - 32px); background: var(--text);
+    color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px; transition: transform .2s;
+    box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+  #toast:not(.show) { visibility: hidden; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  .icon { width: 22px; height: 22px; fill: currentColor; }
+  #toast.err { background: var(--danger); color: #fff; }
+  #lock { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center;
+    justify-content: center; padding: 16px; z-index: 10; }
+  #lock section { width: 100%; max-width: 360px; text-align: center; }
+  #lock p { color: var(--muted); margin: 0 0 14px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 14px; font-weight: 600; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details[open] summary { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div id="lock">
+  <section>
+    <h1 style="margin-bottom:8px">TV Remote</h1>
+    <p>Enter the PIN shown on the computer running the remote.</p>
+    <form id="pinForm">
+      <input id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" aria-label="PIN">
+      <button class="primary" type="submit">Unlock</button>
+    </form>
+  </section>
+</div>
+
+<main>
+  <header>
+    <h1>TV Remote</h1>
+    <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking…</span></div>
+  </header>
+
+  <section>
+    <div class="row" style="--cols:3">
+      <button class="danger" data-action="off" aria-label="Turn TV off">⏻ Off</button>
+      <button data-keys="KEY_SOURCE">Source</button>
+      <button data-keys="KEY_MENU">Menu</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Volume</h2>
+    <div class="vol">
+      <button data-step="-2" aria-label="Volume down">−</button>
+      <input id="volume" type="range" min="0" max="100" value="10" aria-label="Volume">
+      <button data-step="2" aria-label="Volume up">+</button>
+    </div>
+    <div class="vol-label"><span id="volText">–</span> · <a href="#" id="muteLink" style="color:inherit">Mute</a></div>
+  </section>
+
+  <section>
+    <h2>Navigate</h2>
+    <div class="pad">
+      <span></span><button data-keys="KEY_UP" aria-label="Up">▲</button><span></span>
+      <button data-keys="KEY_LEFT" aria-label="Left">◀</button>
+      <button class="ok" data-keys="KEY_ENTER">OK</button>
+      <button data-keys="KEY_RIGHT" aria-label="Right">▶</button>
+      <span></span><button data-keys="KEY_DOWN" aria-label="Down">▼</button><span></span>
+    </div>
+    <div class="row" style="--cols:3; margin-top:12px">
+      <button class="small" data-keys="KEY_RETURN">↩ Back</button>
+      <button class="small" data-keys="KEY_CONTENTS">Smart Hub</button>
+      <button class="small" data-keys="KEY_EXIT">Exit</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Playback</h2>
+    <div class="row" style="--cols:4">
+      <button class="small" data-keys="KEY_REWIND" aria-label="Rewind"><svg class="icon" viewBox="0 0 24 24"><path d="M11 6v12L2.5 12zM21 6v12l-8.5-6z"/></svg></button>
+      <button class="small" data-keys="KEY_PLAY" aria-label="Play"><svg class="icon" viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
+      <button class="small" data-keys="KEY_PAUSE" aria-label="Pause"><svg class="icon" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>
+      <button class="small" data-keys="KEY_FF" aria-label="Fast forward"><svg class="icon" viewBox="0 0 24 24"><path d="M13 6v12l8.5-6zM3 6v12l8.5-6z"/></svg></button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Watch</h2>
+    <form id="ytForm">
+      <input id="ytUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube link" autocomplete="off">
+      <button class="primary" type="submit">Play</button>
+    </form>
+    <p class="hint">In the YouTube app on your phone: Share → Copy link, then paste it here.</p>
+    <div class="row" style="--cols:3; margin-top:10px">
+      <button class="small" data-app="YouTube">YouTube</button>
+      <button class="small" data-app="Netflix">Netflix</button>
+      <button class="small" data-keys="KEY_GUIDE">Guide</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Type on TV</h2>
+    <form id="typeForm">
+      <input id="typeText" type="text" placeholder="Text for the TV's keyboard" aria-label="Text to type" autocomplete="off">
+      <button type="submit">Send</button>
+    </form>
+    <p class="hint">Open a search box on the TV first. If the TV doesn't accept typing, use the arrows above.</p>
+  </section>
+
+  <section>
+    <details>
+      <summary>Channels &amp; numbers ▾</summary>
+      <div class="row" style="--cols:3">
+        <button class="small" data-keys="KEY_1">1</button><button class="small" data-keys="KEY_2">2</button><button class="small" data-keys="KEY_3">3</button>
+        <button class="small" data-keys="KEY_4">4</button><button class="small" data-keys="KEY_5">5</button><button class="small" data-keys="KEY_6">6</button>
+        <button class="small" data-keys="KEY_7">7</button><button class="small" data-keys="KEY_8">8</button><button class="small" data-keys="KEY_9">9</button>
+        <button class="small" data-keys="KEY_CHDOWN">CH −</button><button class="small" data-keys="KEY_0">0</button><button class="small" data-keys="KEY_CHUP">CH +</button>
+      </div>
+    </details>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let pin = "";
+  try { pin = localStorage.getItem("tvPin") || ""; } catch (e) {}
+
+  let toastTimer;
+  function toast(msg, err) {
+    if (!msg) return;
+    const t = $("toast");
+    t.textContent = msg;
+    t.className = "show" + (err ? " err" : "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = err ? "err" : ""; }, err ? 4500 : 1800);
+  }
+
+  async function call(body, quiet) {
+    try {
+      const res = await fetch("/api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Remote-Pin": pin },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.status === 401) { lock(); return data; }
+      if (!data.ok) toast(data.message, true);
+      else if (!quiet) toast(data.message);
+      return data;
+    } catch (e) {
+      toast("Can't reach the remote server. Is the computer running it on?", true);
+      return { ok: false };
+    }
+  }
+
+  function buzz() { if (navigator.vibrate) navigator.vibrate(12); }
+  function lock() { $("lock").classList.remove("hidden"); $("pin").focus(); }
+
+  $("pinForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    pin = $("pin").value.trim();
+    const r = await call({ action: "status" }, true);
+    if (r.ok) {
+      try { localStorage.setItem("tvPin", pin); } catch (e) {}
+      $("lock").classList.add("hidden");
+      refresh();
+    } else if (r.message === "Wrong PIN") {
+      toast("Wrong PIN", true);
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || b.type === "submit") return;
+    buzz();
+    if (b.dataset.keys) call({ action: "key", keys: b.dataset.keys.split(",") }, true);
+    else if (b.dataset.step) call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume);
+    else if (b.dataset.app) call({ action: "app", name: b.dataset.app });
+    else if (b.dataset.action === "off") {
+      if (confirm("Turn the TV off?")) call({ action: "off" }).then(refresh);
+    }
+  });
+
+  $("muteLink").addEventListener("click", (e) => { e.preventDefault(); call({ action: "mute" }).then(refreshVolume); });
+  $("volume").addEventListener("change", (e) => call({ action: "volume", level: +e.target.value }, true).then(refreshVolume));
+  $("volume").addEventListener("input", (e) => { $("volText").textContent = "Volume " + e.target.value; });
+
+  $("ytForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const url = $("ytUrl").value.trim();
+    if (!url) return;
+    toast("Sending to the TV… this can take up to 30 seconds");
+    const r = await call({ action: "youtube", url });
+    if (r.ok) $("ytUrl").value = "";
+  });
+
+  $("typeForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("typeText").value;
+    if (!text) return;
+    const r = await call({ action: "text", text });
+    if (r.ok) $("typeText").value = "";
+  });
+
+  async function refreshVolume() {
+    const r = await call({ action: "get_volume" }, true);
+    const m = r.ok && /Volume is (\d+)( \(muted\))?/.exec(r.message || "");
+    if (m) {
+      $("volume").value = m[1];
+      $("volText").textContent = "Volume " + m[1] + (m[2] ? " (muted)" : "");
+      $("muteLink").textContent = m[2] ? "Unmute" : "Mute";
+    }
+  }
+
+  async function refresh() {
+    const r = await call({ action: "status" }, true);
+    const on = r.ok && /is on/.test(r.message || "");
+    $("dot").className = "dot " + (r.ok ? (on ? "on" : "off") : "");
+    $("statusText").textContent = r.ok ? (on ? "TV on" : "TV off") : "Offline";
+    if (on) refreshVolume();
+  }
+
+  if (pin) {
+    $("lock").classList.add("hidden");
+    refresh();
+  } else {
+    lock();
+  }
+  setInterval(() => { if (!document.hidden && pin) refresh(); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && pin) refresh(); });
+})();
+</script>
+</body>
+</html>

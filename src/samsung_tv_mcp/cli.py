@@ -18,6 +18,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("diagnose", help="probe the TV and test pairing")
     sub.add_parser("pair", help="PIN-pair with TVs that use encrypted firmware")
+    rem = sub.add_parser("remote", help="run the family web remote for phones and laptops")
+    rem.add_argument("--port", type=int, default=8765)
+    rem.add_argument("--pin", help="set a new family PIN (otherwise the saved one is reused)")
+    typ = sub.add_parser("type", help="type text into the TV's on-screen keyboard")
+    typ.add_argument("text")
+    typ.add_argument("--enter", action="store_true", help="also finish/submit the text")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
     sub.add_parser("status")
@@ -51,6 +57,14 @@ def main(argv: list[str] | None = None) -> int:
                 print(tv.pair_start())
                 print(tv.pair_finish(input("PIN shown on the TV: ")))
                 out = tv.diagnose()
+            case "remote":
+                from .webremote import serve
+                serve(args.port, args.pin)
+                return 0
+            case "type":
+                from .text_input import type_text
+                type_text(tv.s.host, args.text, args.enter)
+                out = "Typed."
             case "install-claude":
                 from .install import install
                 out = install(tv.s.host, args.config)

@@ -140,6 +140,18 @@ async def send_keys(keys: list[str], delay_seconds: float = 0.4) -> str:
 
 
 @mcp.tool()
+async def type_text(text: str, submit: bool = False) -> str:
+    """Type text into whatever on-screen keyboard is open on the TV (e.g. a search box).
+
+    Experimental on this model: if the TV rejects it, navigate the on-screen keyboard with send_keys.
+    """
+    from .text_input import type_text as _type
+
+    await run(_type, tv().s.host, text, submit)
+    return "Typed."
+
+
+@mcp.tool()
 async def list_keys() -> str:
     """List common remote-control key names for send_keys."""
     return "\n".join(f"{k}: {v}" for k, v in COMMON_KEYS.items())

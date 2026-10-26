@@ -105,6 +105,14 @@ class EncryptedPairing:
         return token, session_id
 
 
+def persistent_connections() -> bool:
+    """Experimental: keep one session open between presses (SAMSUNG_TV_PERSISTENT=1).
+
+    Off by default: on the UA55H6300 the TV ignored keys sent over a kept-open session.
+    """
+    return os.environ.get("SAMSUNG_TV_PERSISTENT", "").strip() == "1"
+
+
 _loop: asyncio.AbstractEventLoop | None = None
 _loop_lock = threading.Lock()
 
@@ -154,6 +162,12 @@ class EncryptedRemote:
                 "This TV uses encrypted pairing and hasn't been paired yet. Run "
                 "`samsung-tv pair` (or ask Claude to pair with the TV) and enter the PIN shown on screen."
             )
+        if not persistent_connections():
+            # The proven path: a fresh session per call, exactly what the button test uses.
+            if not self.is_reachable():
+                raise TVUnreachable(f"Cannot reach the TV at {self.host}:{self.port}. It is probably off.")
+            _run(self._send_once(normalized, creds, delay))
+            return normalized
         future = asyncio.run_coroutine_threadsafe(self._send(normalized, creds, delay), _background_loop())
         try:
             future.result(timeout=self.timeout * 2 + delay * len(normalized) + 5)
@@ -203,6 +217,18 @@ class EncryptedRemote:
                 pass
         if web is not None:
             await web.close()
+
+    async def _send_once(self, keys: list[str], creds: tuple[str, str], delay: float) -> None:
+        aiohttp, _, Remote, SendRemoteKey = _imports()
+        token, session_id = creds
+        async with aiohttp.ClientSession() as web:
+            remote = Remote(self.host, web_session=web, token=token, session_id=session_id,
+                            port=self.port, timeout=self.timeout, key_press_delay=delay)
+            try:
+                await asyncio.wait_for(remote.start_listening(), self.timeout)
+                await remote.send_commands([SendRemoteKey.click(k) for k in keys])
+            finally:
+                await remote.close()
 
     async def _send(self, keys: list[str], creds: tuple[str, str], delay: float) -> None:
         _, _, _, SendRemoteKey = _imports()

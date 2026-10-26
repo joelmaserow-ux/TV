@@ -11,6 +11,7 @@ import json
 import secrets
 import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -73,6 +74,20 @@ class RemoteApp:
         raise ValueError(f"Unknown action {action!r}")
 
 
+QUIET_ACTIONS = {"status", "get_volume", "capabilities"}
+
+
+def _log(handler, body: dict, outcome: str, message: str) -> None:
+    """One line per action in the remote's window, so failures are visible on the computer."""
+    action = body.get("action", "?")
+    if action in QUIET_ACTIONS and outcome == "ok":
+        return
+    detail = ",".join(body.get("keys", [])) if action == "key" else ""
+    who = handler.client_address[0]
+    line = f"{time.strftime('%H:%M:%S')}  {who:<15} {action} {detail}".rstrip()
+    print(f"{line}  -> {outcome}" + (f": {message}" if message and outcome != "ok" else ""), flush=True)
+
+
 def make_handler(app: RemoteApp):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -105,10 +120,13 @@ def make_handler(app: RemoteApp):
                 body = json.loads(self.rfile.read(length) or b"{}")
                 message = app.handle(body)
                 self._json(200, {"ok": True, "message": message})
+                _log(self, body, "ok", message)
             except (TVError, ValueError, KeyError) as exc:
                 self._json(200, {"ok": False, "message": str(exc)})
+                _log(self, body if "body" in locals() else {}, "FAILED", str(exc))
             except Exception as exc:  # never leave a phone hanging on an unexpected error
                 self._json(500, {"ok": False, "message": f"Something went wrong: {type(exc).__name__}: {exc}"})
+                _log(self, body if "body" in locals() else {}, "ERROR", f"{type(exc).__name__}: {exc}")
 
     return Handler
 

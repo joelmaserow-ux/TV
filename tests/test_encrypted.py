@@ -58,6 +58,7 @@ class FakeLibRemote:
 
 @pytest.fixture
 def fake_lib(monkeypatch):
+    monkeypatch.setenv("SAMSUNG_TV_PERSISTENT", "1")
     from samsungtvws.encrypted.remote import SendRemoteKey
     import aiohttp
 
@@ -135,3 +136,17 @@ def test_close_shuts_the_kept_connection(fake_lib):
     remote.send_keys(["KEY_UP"], 0)
     remote.close()
     assert fake_lib.instances[0].closed and remote._remote is None
+
+
+def test_default_uses_a_fresh_session_per_call(fake_lib, monkeypatch):
+    monkeypatch.delenv("SAMSUNG_TV_PERSISTENT")
+    server = socket.create_server(("127.0.0.1", 0))
+    port = server.getsockname()[1]
+    try:
+        remote = EncryptedRemote("127.0.0.1", port=port)
+        remote.send_keys(["KEY_UP"], 0)
+        remote.send_keys(["KEY_DOWN"], 0)
+    finally:
+        server.close()
+    assert [i.keys for i in fake_lib.instances] == [["KEY_UP"], ["KEY_DOWN"]]
+    assert all(i.closed for i in fake_lib.instances)

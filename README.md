@@ -86,8 +86,9 @@ browser menu) so it opens like an app. Keep the window running; the computer mus
 - **Search YouTube** on the remote searches from the computer and shows results on your phone;
   tap one to play it on the TV. No typing on the TV needed. (Claude can do the same with
   `search_youtube`.)
-- Typing into the TV's own keyboard uses the port-8001 text API, which the UA55H6300 doesn't
-  support, so the button test hides it there.
+- **Apps:** at startup the remote checks which apps the TV can open directly and shows a button
+  for each (see them with `samsung-tv apps`). **All apps** opens Smart Hub for the rest.
+- Typing into the TV's own keyboard isn't supported by the UA55H6300, so the remote doesn't offer it.
 - For a remote that's always available, run it on an always-on machine such as a Raspberry Pi.
 
 ---

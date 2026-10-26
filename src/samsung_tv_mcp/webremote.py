@@ -19,7 +19,6 @@ from . import keymap
 from .config import Settings
 from .encrypted import credentials_path
 from .legacy import TVError, normalize_key
-from .text_input import type_text
 from .tv import TV
 
 PAGE = (Path(__file__).parent / "remote.html").read_text(encoding="utf-8")
@@ -31,6 +30,18 @@ class RemoteApp:
         self.pin = pin
         # One command at a time: the TV protocols don't like overlapping connections.
         self.lock = threading.Lock()
+        self.found_apps: list[dict] | None = None
+
+    def discover_apps(self) -> None:
+        """Look up which apps the TV can open (runs in the background at startup)."""
+        from .apps import find_apps
+
+        try:
+            self.tv.wait_for_apps(timeout=30)
+            self.found_apps = find_apps(self.tv.dial)
+        except TVError:
+            self.found_apps = []
+        print("Apps this TV can open: " + (", ".join(a["name"] for a in self.found_apps) or "none found"), flush=True)
 
     def handle(self, body: dict) -> str:
         action = body.get("action")
@@ -54,11 +65,6 @@ class RemoteApp:
                     return self.tv.open_app(str(body["name"]))
                 case "youtube":
                     return self.tv.play_youtube(str(body["url"]))
-                case "text":
-                    if keymap.load(self.tv.s.host).get("typing") is False:
-                        raise TVError("The button test found this TV doesn't accept typing.")
-                    type_text(self.tv.s.host, str(body["text"])[:500], bool(body.get("submit")))
-                    return "Typed."
                 case "youtube_link":
                     return self.tv.link_youtube(str(body["code"]))
                 case "search":
@@ -70,6 +76,7 @@ class RemoteApp:
                     data = keymap.load(self.tv.s.host)
                     return json.dumps({
                         "unsupported": keymap.unsupported(data),
+                        "found_apps": self.found_apps,
                         "apps": data.get("apps", {}),
                         "typing": data.get("typing"),
                     })
@@ -169,6 +176,7 @@ def serve(port: int = 8765, pin: str | None = None) -> None:
     settings = Settings.from_env()
     pin = load_pin(settings.host, pin)
     app = RemoteApp(TV(settings), pin)
+    threading.Thread(target=app.discover_apps, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(app))
     print("Family TV remote is running.\n")
     print(f"  Open on any phone or laptop on your Wi-Fi:  http://{lan_ip(settings.host)}:{port}")

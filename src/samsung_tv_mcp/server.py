@@ -99,6 +99,17 @@ async def open_app(app: str, params: str = "") -> str:
 
 
 @mcp.tool()
+async def list_apps() -> str:
+    """List the apps this TV can open directly with open_app (others are reached via Smart Hub)."""
+    from .apps import find_apps
+
+    found = await run(find_apps, tv().dial)
+    if not found:
+        return "No directly-openable apps found. Use open_app('Smart Hub') and navigate with send_keys."
+    return "Apps this TV can open: " + ", ".join(f"{a['name']} (open_app '{a['id']}')" for a in found)
+
+
+@mcp.tool()
 async def app_status(app: str) -> str:
     """Check whether an app is running, stopped, or unavailable on the TV."""
     return await run(tv().app_status, app)
@@ -151,18 +162,6 @@ async def send_keys(keys: list[str], delay_seconds: float = 0.4) -> str:
         raise ToolError("Send at most 60 keys per call.")
     sent = await run(tv().press, keys, max(0.1, min(delay_seconds, 5.0)))
     return "Pressed " + ", ".join(sent)
-
-
-@mcp.tool()
-async def type_text(text: str, submit: bool = False) -> str:
-    """Type text into whatever on-screen keyboard is open on the TV (e.g. a search box).
-
-    Experimental on this model: if the TV rejects it, navigate the on-screen keyboard with send_keys.
-    """
-    from .text_input import type_text as _type
-
-    await run(_type, tv().s.host, text, submit)
-    return "Typed."
 
 
 @mcp.tool()

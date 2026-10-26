@@ -97,3 +97,11 @@ def test_youtube_link_action(server):
     base, tv = server
     tv.link_youtube = lambda code: f"Linked {code}"
     assert post(base, {"action": "youtube_link", "code": "123 456"})[1] == {"ok": True, "message": "Linked 123 456"}
+
+
+def test_capabilities_include_found_apps(server):
+    base, tv = server
+    import samsung_tv_mcp.webremote as wr
+    # The handler's app is reachable through the server fixture only via requests; set via action.
+    code, data = post(base, {"action": "capabilities"})
+    assert code == 200 and json.loads(data["message"])["found_apps"] is None

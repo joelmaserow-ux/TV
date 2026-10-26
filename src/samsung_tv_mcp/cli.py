@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     typ.add_argument("--enter", action="store_true", help="also finish/submit the text")
     bt = sub.add_parser("button-test", help="check every remote button on the TV and remember what works")
     bt.add_argument("only", nargs="*", help="retest just these buttons, e.g. Off Pause")
+    sub.add_parser("apps", help="list the apps this TV can open directly")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
     sub.add_parser("status")
@@ -71,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
                 from .buttontest import run as run_test
                 run_test(tv, only=args.only or None)
                 return 0
+            case "apps":
+                from .apps import find_apps
+                found = find_apps(tv.dial)
+                out = "\n".join(f"{a['name']}  (samsung-tv app {a['id']})" for a in found) or "None found."
             case "install-claude":
                 from .install import install
                 out = install(tv.s.host, args.config)

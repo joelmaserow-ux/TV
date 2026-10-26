@@ -43,9 +43,9 @@ class FakeApi:
     async def connect(self):
         return True
 
-    async def play_video(self, vid):
-        FakeApi.calls.append(("play", vid))
-        return True
+    async def _command(self, command, params):
+        FakeApi.calls.append(("play", params["videoId"]))
+        return command == "setPlaylist" and params["videoIds"] == params["videoId"]
 
     async def seek_to(self, t):
         FakeApi.calls.append(("seek", t))
@@ -61,7 +61,8 @@ def fake_api(monkeypatch):
     return FakeApi
 
 
-def test_link_then_play(fake_api, tmp_path):
+def test_link_then_play(fake_api, tmp_path, monkeypatch):
+    monkeypatch.setattr(youtube.asyncio, "sleep", _no_sleep)
     assert youtube.link("1.2.3.4", "123 456 789 012") == "Living Room TV"
     assert json.loads((tmp_path / "1.2.3.4.youtube.json").read_text())["screenId"] == "abc"
     youtube.play("1.2.3.4", "jNQXAC9IVRw")
@@ -73,7 +74,12 @@ def test_link_rejects_short_code():
         youtube.link("1.2.3.4", "12")
 
 
+async def _no_sleep(_):
+    pass
+
+
 def test_tv_uses_lounge_when_linked(fake_api, monkeypatch):
+    monkeypatch.setattr(youtube.asyncio, "sleep", _no_sleep)
     tv = TV(Settings(host="1.2.3.4", port=1, mac=None, client_name="t", client_id="t", use_cec=False,
                      timeout=1, rendering_control_url=None, dial_url="http://127.0.0.1:1/ws/app/"))
     youtube.link("1.2.3.4", "123456789012")

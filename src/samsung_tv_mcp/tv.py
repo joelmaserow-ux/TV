@@ -224,13 +224,17 @@ class TV:
         )
 
     def _ensure_youtube_open(self, wait: float = 25.0) -> None:
-        if self.dial.status("YouTube") != "running":
+        just_opened = self.dial.status("YouTube") != "running"
+        if just_opened:
             self.dial.launch("YouTube")
         deadline = time.monotonic() + wait
         while not youtube.is_online(self.s.host):
             if time.monotonic() > deadline:
                 raise TVError("The TV's YouTube app opened but never came online for casting.")
             time.sleep(2)
+        if just_opened:
+            # "Online" comes before the app can actually take a video.
+            time.sleep(8)
 
     def link_youtube(self, code: str) -> str:
         name = youtube.link(self.s.host, code)

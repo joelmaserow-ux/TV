@@ -87,11 +87,21 @@ async def _play(host: str, video_id: str, start: int | None) -> None:
             if not await api.connect():
                 raise TVError("Couldn't connect to the TV's YouTube app. Make sure it's open, or relink it.")
         try:
-            if not await api.play_video(video_id):
+            # The full setPlaylist form the phone app sends; older TV apps ignore the bare one.
+            ok = await api._command("setPlaylist", {
+                "videoId": video_id,
+                "videoIds": video_id,
+                "currentTime": start or 0,
+                "currentIndex": 0,
+                "listId": "",
+                "audioOnly": "false",
+                "params": "",
+                "playerParams": "",
+            })
+            if not ok:
                 raise TVError("YouTube refused to start the video.")
-            if start:
-                await asyncio.sleep(4)
-                await api.seek_to(start)
+            # Disconnecting straight away can cancel the request on some TV apps.
+            await asyncio.sleep(3)
         finally:
             try:
                 await api.disconnect()

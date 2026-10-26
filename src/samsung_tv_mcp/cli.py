@@ -13,6 +13,7 @@ from .tv import TV
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="samsung-tv", description="Control a Samsung H-series TV.")
+    p.add_argument("-v", "--verbose", action="store_true", help="print protocol debug logs")
     p.add_argument("--host", help="TV IP address (default: $SAMSUNG_TV_HOST or 192.168.1.106)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("diagnose", help="probe the TV and test pairing")
@@ -33,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("youtube-link", help="link with the code from YouTube > Settings > Link with TV code").add_argument("code", nargs="+")
     args = p.parse_args(argv)
 
+    if args.verbose:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
     if args.host:
         os.environ["SAMSUNG_TV_HOST"] = args.host
     tv = TV(Settings.from_env())

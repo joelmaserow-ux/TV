@@ -25,7 +25,44 @@ An [MCP](https://modelcontextprotocol.io) server that lets Claude control a **Sa
 
 ---
 
-## Step-by-step installation
+## Quick setup (Windows/Mac, using uv)
+
+This is the fastest route and what was used on the UA55H6300. The longer manual route follows below.
+
+1. **Install uv.** Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`.
+   Mac: `curl -LsSf https://astral.sh/uv/install.sh | sh`. Then reopen the terminal.
+2. **Check the TV's IP** under **Menu → Network → Network Status** (here: `192.168.1.106`), and
+   ideally reserve it in your router.
+3. **Pair the remote** (TV on). A PIN appears on the TV; type it in:
+   ```powershell
+   $tv = "git+https://github.com/joelmaserow-ux/TV@ccr-5fac4f84-5wt34a"
+   uvx --from $tv samsung-tv --host 192.168.1.106 pair
+   ```
+4. **Set up YouTube** (once):
+   - On the TV, open YouTube and **sign in** (code at youtube.com/activate). As a guest, the app
+     stops on an account picker when opened and ignores casts.
+   - In YouTube on the TV, open **Settings → Link with TV code** and run
+     `uvx --from $tv samsung-tv youtube-link 123 456 789 012` with the code shown.
+5. **Test:** `uvx --from $tv samsung-tv youtube "https://youtu.be/aqz-KE-bpKQ"`.
+6. **Add to Claude Desktop** (**Settings → Developer → Edit Config**), then fully restart it:
+   ```json
+   {
+     "mcpServers": {
+       "samsung-tv": {
+         "command": "uvx",
+         "args": ["--from", "git+https://github.com/joelmaserow-ux/TV@ccr-5fac4f84-5wt34a", "samsung-tv-mcp"],
+         "env": { "SAMSUNG_TV_HOST": "192.168.1.106" }
+       }
+     }
+   }
+   ```
+   If Claude can't find `uvx`, use its full path (`where.exe uvx` on Windows, `which uvx` on Mac).
+
+After an update to this repo, run any command once with `uvx --refresh --from $tv ...` to pick it up.
+
+---
+
+## Step-by-step installation (manual)
 
 You need a computer that **stays on the same home network as the TV**: a Mac, a Windows PC, or a
 Raspberry Pi. Claude Desktop or Claude Code runs on that computer and starts this server.
@@ -202,6 +239,7 @@ Set these in the `env` block of the MCP config (or export them before running `s
 | `SAMSUNG_TV_RENDERING_CONTROL_URL` | auto-discovered | Override the UPnP volume URL |
 | `SAMSUNG_TV_DIAL_URL` | auto-discovered | Override the DIAL apps URL |
 | `SAMSUNG_TV_TIMEOUT` | `5` | Network timeout in seconds |
+| `SAMSUNG_TV_YOUTUBE_STARTUP` | `15` | Seconds to let a freshly opened YouTube app load before casting |
 
 ## Optional: turning the TV on with a Raspberry Pi (HDMI-CEC)
 
@@ -225,6 +263,8 @@ Set these in the `env` block of the MCP config (or export them before running `s
   passed at launch. Link it once: on the TV open **YouTube → Settings → Link with TV code** (older
   apps: **Pair device**), then run `samsung-tv youtube-link 123 456 789 012` with the code shown, or
   ask Claude to link it. Afterwards `play_youtube` casts the way the phone app does.
+- **YouTube goes back to "choose an account" / sign-in**: sign in to YouTube on the TV. In guest
+  mode the app sits on the account picker when opened and drops casts.
 - **YouTube won't open at all**: YouTube has been dropping old
   Smart TV models. If the YouTube app doesn't work with the TV's own remote, it won't work here
   either. A Chromecast or Fire TV stick is the reliable fix.

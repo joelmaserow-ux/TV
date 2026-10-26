@@ -58,15 +58,44 @@ def profile_keys(profiles: list[str], name: str) -> list[str]:
     return ["KEY_UP"] * len(profiles) + ["KEY_DOWN"] * index + ["KEY_ENTER"]
 
 
+def _state(tv) -> str:
+    try:
+        return tv.dial.status("Netflix")
+    except TVError:
+        return "unknown"
+
+
+def _close(tv, timeout: float = 10.0) -> None:
+    """Fully close Netflix so it starts cold on the profile screen.
+
+    A Netflix that's only "hidden" in the background resumes straight into the last profile,
+    so stop it whatever state it reports and wait until the TV says it has stopped.
+    """
+    try:
+        tv.dial.stop("Netflix")
+    except TVError:
+        pass
+    deadline = time.monotonic() + timeout
+    exited = False
+    while _state(tv) not in ("stopped", "not available"):
+        if time.monotonic() > deadline:
+            if exited:
+                raise TVError(
+                    "Couldn't close Netflix to get back to its profile screen. Close it with the "
+                    "TV remote (Exit), then try again."
+                )
+            # The TV didn't let DIAL close it: Exit closes the foreground app on this model.
+            exited = True
+            tv.press(["KEY_EXIT"])
+            deadline = time.monotonic() + 5
+        time.sleep(1)
+    time.sleep(2)  # let it finish shutting down before relaunching
+
+
 def open_as(tv, name: str) -> str:
     data = load(tv.s.host)
     keys = profile_keys(data["profiles"], name)
-    try:
-        if tv.dial.status("Netflix") == "running":
-            tv.dial.stop("Netflix")  # restart so it opens on the profile screen
-            time.sleep(3)
-    except TVError:
-        pass
+    _close(tv)
     tv._launch("Netflix")
     time.sleep(float(data["startup_wait"]))
     tv.press(keys, delay=0.5)

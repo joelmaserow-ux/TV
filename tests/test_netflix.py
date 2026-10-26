@@ -17,14 +17,16 @@ def test_profile_keys():
 
 
 class FakeDial:
-    def __init__(self, state):
-        self.state, self.stopped = state, []
+    def __init__(self, state, stoppable=True):
+        self.state, self.stopped, self.stoppable = state, [], stoppable
 
     def status(self, name):
         return self.state
 
     def stop(self, name):
         self.stopped.append(name)
+        if self.stoppable:
+            self.state = "stopped"
 
 
 class FakeTV:
@@ -40,14 +42,45 @@ class FakeTV:
         self.pressed.append(keys)
 
 
-def test_open_as_restarts_running_netflix(monkeypatch):
-    slept = []
-    monkeypatch.setattr(netflix.time, "sleep", slept.append)
-    tv = FakeTV("running")
+def _fake_clock(monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(netflix.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(netflix.time, "sleep", lambda t: clock.__setitem__(0, clock[0] + t))
+    return clock
+
+
+@pytest.mark.parametrize("state", ["running", "hidden"])
+def test_open_as_always_restarts_netflix(monkeypatch, state):
+    _fake_clock(monkeypatch)
+    tv = FakeTV(state)
     assert netflix.open_as(tv, "bianca") == "Opened Netflix as Bianca."
     assert tv.dial.stopped == ["Netflix"] and tv.launched == ["Netflix"]
     assert tv.pressed == [["KEY_UP"] * 5 + ["KEY_DOWN"] + ["KEY_ENTER"]]
-    assert slept == [3, 15.0]
+
+
+def test_close_falls_back_to_exit_key(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV("hidden")
+    tv.dial.stoppable = False
+    real_press = tv.press
+
+    def press(keys, delay=0.4):
+        real_press(keys, delay)
+        if keys == ["KEY_EXIT"]:
+            tv.dial.state = "stopped"
+
+    tv.press = press
+    netflix.open_as(tv, "Joel")
+    assert tv.pressed[0] == ["KEY_EXIT"] and tv.launched == ["Netflix"]
+
+
+def test_close_gives_up_clearly(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV("running")
+    tv.dial.stoppable = False
+    with pytest.raises(netflix.TVError, match="Couldn't close Netflix"):
+        netflix.open_as(tv, "Joel")
+    assert tv.launched == []
 
 
 def test_profiles_and_wait_are_configurable(monkeypatch):
@@ -58,4 +91,4 @@ def test_profiles_and_wait_are_configurable(monkeypatch):
     netflix.save("h", data)
     tv = FakeTV("stopped")
     netflix.open_as(tv, "Dad")
-    assert tv.dial.stopped == [] and tv.pressed == [["KEY_UP", "KEY_UP", "KEY_DOWN", "KEY_ENTER"]]
+    assert tv.pressed == [["KEY_UP", "KEY_UP", "KEY_DOWN", "KEY_ENTER"]]

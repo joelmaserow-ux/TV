@@ -113,7 +113,7 @@ def test_netflix_watch_runs_in_background_and_blocks_other_keys(server, monkeypa
     base, tv = server
     release = th.Event()
 
-    def slow_watch(tv_, profile, show):
+    def slow_watch(tv_, profile, show, season=None, episode=None):
         release.wait(5)
         return f"Opened Netflix as {profile}. Searched for {show}."
 
@@ -132,3 +132,17 @@ def test_netflix_watch_runs_in_background_and_blocks_other_keys(server, monkeypa
         th.Event().wait(0.05)
     assert job["last"] == {"ok": True, "message": "Opened Netflix as Ben. Searched for rick and morty."}
     assert post(base, {"action": "key", "keys": ["KEY_UP"]})[1]["ok"]
+
+
+def test_netflix_watch_passes_season_and_episode(server, monkeypatch):
+    import samsung_tv_mcp.netflix as nf
+    base, tv = server
+    got = []
+    monkeypatch.setattr(nf, "watch", lambda tv_, p, show, season, episode: got.append((p, show, season, episode)) or "ok")
+    code, data = post(base, {"action": "netflix_watch", "profile": "Ben", "show": "Rick and Morty", "season": "2", "episode": "4"})
+    assert "S2 E4" in data["message"]
+    for _ in range(50):
+        if got:
+            break
+        __import__("time").sleep(0.05)
+    assert got == [("Ben", "Rick and Morty", 2, 4)]

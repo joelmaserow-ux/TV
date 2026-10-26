@@ -30,6 +30,10 @@ def defaults() -> dict:
         "home_wait": 15.0,  # after picking a profile, until the home screen reacts to Left/Up
         "keyboard_wait": 4.0,  # after opening Search, until the keyboard shows
         "type_gap": 0.4,  # between key presses while typing
+        "title_wait": 6.0,  # after opening a show from search, until its page reacts
+        "episodes_wait": 4.0,  # after Down, Down, OK, until the episodes view shows
+        "step_wait": 1.5,  # after Left onto the season list
+        "season_wait": 3.0,  # after choosing a season, until its episodes load
     }
 
 
@@ -231,10 +235,49 @@ def search(tv, title: str) -> str:
     return f"Searched Netflix for “{typed}” and opened the first result."
 
 
-def watch(tv, profile: str, title: str = "") -> str:
-    """Open Netflix as `profile` and, if given, search for `title` and open it."""
+def episode_steps(season: int, episode: int) -> list[tuple[list[str], str]]:
+    """(presses, pause-setting) pairs from a show's page to playing season/episode.
+
+    On this TV: Down, Down, OK opens the episodes view; Left goes to the season list, which
+    starts on Season 1; Down to the season; Right lands on that season's first episode; Down
+    to the episode; OK plays it.
+    """
+    if season < 1 or episode < 1:
+        raise ValueError("Season and episode start at 1.")
+    return [
+        (["KEY_DOWN", "KEY_DOWN", "KEY_ENTER"], "episodes_wait"),
+        (["KEY_LEFT"], "step_wait"),
+        (["KEY_DOWN"] * (season - 1) + ["KEY_RIGHT"], "season_wait"),
+        (["KEY_DOWN"] * (episode - 1) + ["KEY_ENTER"], ""),
+    ]
+
+
+def open_episode(tv, season: int, episode: int) -> str:
+    """From a show's page (just opened from search), play the given episode."""
+    data = load(tv.s.host)
+    for keys, pause in episode_steps(season, episode):
+        _press_slowly(tv, keys, 0.6)
+        if pause:
+            time.sleep(float(data[pause]))
+    return f"Playing season {season}, episode {episode}."
+
+
+def watch(tv, profile: str, title: str = "", season: int | None = None, episode: int | None = None) -> str:
+    """Open Netflix as `profile`; if given, find `title`, and play `season`/`episode` of it."""
+    wants_episode = season is not None or episode is not None
+    if wants_episode:
+        if not title.strip():
+            raise ValueError("Say which show the season and episode are for.")
+        season = 1 if season is None else season
+        episode = 1 if episode is None else episode
+        episode_steps(season, episode)  # validate before touching the TV
     opened = open_as(tv, profile)
     if not title.strip():
         return opened
-    time.sleep(float(load(tv.s.host).get("home_wait", 10)))
-    return f"{opened} {search(tv, title)}"
+    data = load(tv.s.host)
+    time.sleep(float(data["home_wait"]))
+    found = search(tv, title)
+    if not wants_episode:
+        return f"{opened} {found}"
+    time.sleep(float(data["title_wait"]))
+    return f"{opened} {found} {open_episode(tv, season, episode)}"

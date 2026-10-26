@@ -197,3 +197,33 @@ def test_watch_waits_home_wait_before_search(monkeypatch):
     tv = FakeTV()
     netflix.watch(tv, "Ben", "rick")
     assert 15.0 in slept
+
+
+def test_episode_steps():
+    D, L, R, OK = "KEY_DOWN", "KEY_LEFT", "KEY_RIGHT", "KEY_ENTER"
+    steps = netflix.episode_steps(3, 5)
+    assert [k for k, _ in steps] == [[D, D, OK], [L], [D, D, R], [D, D, D, D, OK]]
+    assert [k for k, _ in netflix.episode_steps(1, 1)] == [[D, D, OK], [L], [R], [OK]]
+    with pytest.raises(ValueError):
+        netflix.episode_steps(0, 1)
+
+
+def test_watch_plays_episode_after_search(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV()
+    msg = netflix.watch(tv, "Ben", "Rick and Morty", season=2, episode=4)
+    assert msg.endswith("Playing season 2, episode 4.")
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    tail = [k for keys, _ in netflix.episode_steps(2, 4) for k in keys]
+    assert presses[-len(tail):] == tail
+    # The search's own final OK comes right before the episode presses.
+    assert presses[-len(tail) - 1] == "KEY_ENTER"
+
+
+def test_episode_without_show_is_refused_before_touching_tv():
+    tv = FakeTV()
+    with pytest.raises(ValueError, match="which show"):
+        netflix.watch(tv, "Ben", "", season=2, episode=1)
+    with pytest.raises(ValueError):
+        netflix.watch(tv, "Ben", "Rick", season=0, episode=1)
+    assert tv.events == []

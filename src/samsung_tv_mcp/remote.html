@@ -78,6 +78,10 @@
   .result .m { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .result > div { min-width: 0; }
   button:disabled { opacity: .5; }
+  .episode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .episode-row label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .episode-row input { flex: 1; min-width: 0; width: 100%; font: inherit; color: var(--text); background: var(--btn);
+    border: 2px solid transparent; border-radius: 12px; padding: 10px; }
   button.selected { background: var(--accent); color: var(--accent-text); }
   #toast:not(.show) { visibility: hidden; }
   #toast.show { transform: translateX(-50%) translateY(0); }
@@ -180,10 +184,14 @@
       <input id="netflixShow" type="search" placeholder="Search Netflix" aria-label="Search Netflix" autocomplete="off" enterkeyhint="search">
       <button class="primary" type="submit" id="netflixGo">Search</button>
     </form>
+    <div class="episode-row">
+      <label>Season <input id="nfSeason" type="number" inputmode="numeric" min="1" placeholder="–"></label>
+      <label>Episode <input id="nfEpisode" type="number" inputmode="numeric" min="1" placeholder="–"></label>
+    </div>
     <div id="netflixResults" class="results"></div>
     <button type="button" class="small" id="netflixOpen" style="width:100%; margin-top:10px">Just open Netflix</button>
-    <p class="hint">Pick who's watching, search, then tap a show. The TV opens Netflix, picks the profile and
-      finds the show (1–2 minutes).</p>
+    <p class="hint">Pick who's watching, search, then tap a show. For a series, fill in Season and Episode first to
+      play that episode (leave blank to just open the show). Takes 1–2 minutes.</p>
   </section>
 
   <section>
@@ -415,10 +423,18 @@
     setTimeout(poll, 3000);
   }
 
-  async function netflixWatch(show) {
+  async function netflixWatch(show, isMovie) {
     if (!netflixProfile) { toast("Pick who's watching first", true); return; }
-    const r = await call({ action: "netflix_watch", profile: netflixProfile, show });
-    if (r.ok) { $("netflixResults").innerHTML = ""; $("netflixShow").value = ""; watchJob(); }
+    // Season/episode only apply to series; blank means just open the show's page.
+    const season = show && !isMovie ? $("nfSeason").value.trim() : "";
+    const episode = show && !isMovie ? $("nfEpisode").value.trim() : "";
+    if ((season && +season < 1) || (episode && +episode < 1)) { toast("Season and episode start at 1", true); return; }
+    const r = await call({ action: "netflix_watch", profile: netflixProfile, show, season, episode });
+    if (r.ok) {
+      $("netflixResults").innerHTML = ""; $("netflixShow").value = "";
+      $("nfSeason").value = ""; $("nfEpisode").value = "";
+      watchJob();
+    }
   }
 
   function resultButton(title, meta, img, poster, onPick) {
@@ -451,14 +467,14 @@
     if (r.ok) { try { items = JSON.parse(r.message); } catch (err) {} }
     for (const v of items) {
       box.append(resultButton(v.title, [v.kind, v.year].filter(Boolean).join(" · "), v.poster, true,
-        () => netflixWatch(v.title)));
+        () => netflixWatch(v.title, v.kind === "Movie")));
     }
     // Always offer the typed name too, in case the catalogue search misses it or is down.
     box.append(resultButton("Watch “" + q + "”", "Type exactly this into Netflix's search", "", true,
-      () => netflixWatch(q)));
+      () => netflixWatch(q, false)));
   });
 
-  $("netflixOpen").addEventListener("click", () => netflixWatch(""));
+  $("netflixOpen").addEventListener("click", () => netflixWatch("", true));
 
   // One button per app the TV says it can open, then "All apps" (Smart Hub) for the rest.
   function renderApps(found) {

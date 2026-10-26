@@ -100,9 +100,14 @@ class RemoteApp:
             case "youtube":
                 return self.tv.play_youtube(str(body["url"]))
             case "netflix_watch":
+                season = int(body["season"]) if body.get("season") else None
+                episode = int(body["episode"]) if body.get("episode") else None
+                what = str(body.get("show", ""))
+                if what and (season or episode):
+                    what += f" S{season or 1} E{episode or 1}"
                 return self.start_job(
-                    netflix.watch, str(body["profile"]), str(body.get("show", "")),
-                    label="Opening Netflix" + (f" for {body.get('show')}" if body.get("show") else ""))
+                    netflix.watch, str(body["profile"]), str(body.get("show", "")), season, episode,
+                    label="Opening Netflix" + (f" for {what}" if what else ""))
             case "netflix_find":
                 from .netflix_search import search as find
                 return json.dumps(find(str(body.get("query", ""))[:100]))

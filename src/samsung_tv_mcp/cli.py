@@ -27,6 +27,10 @@ def main(argv: list[str] | None = None) -> int:
     bt = sub.add_parser("button-test", help="check every remote button on the TV and remember what works")
     bt.add_argument("only", nargs="*", help="retest just these buttons, e.g. Off Pause")
     sub.add_parser("apps", help="list the apps this TV can open directly")
+    nf = sub.add_parser("netflix", help="open Netflix as a profile, e.g. samsung-tv netflix Joel")
+    nf.add_argument("profile")
+    nf.add_argument("--wait", type=float, help="seconds Netflix needs to show the profile screen (remembered)")
+    sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
     sub.add_parser("status")
@@ -76,6 +80,16 @@ def main(argv: list[str] | None = None) -> int:
                 from .apps import find_apps
                 found = find_apps(tv.dial)
                 out = "\n".join(f"{a['name']}  (samsung-tv app {a['id']})" for a in found) or "None found."
+            case "netflix":
+                from . import netflix
+                if args.wait:
+                    data = netflix.load(tv.s.host)
+                    data["startup_wait"] = args.wait
+                    netflix.save(tv.s.host, data)
+                out = netflix.open_as(tv, args.profile)
+            case "netflix-profiles":
+                from . import netflix
+                out = "Profiles, top to bottom: " + ", ".join(netflix.set_profiles(tv.s.host, args.names))
             case "install-claude":
                 from .install import install
                 out = install(tv.s.host, args.config)

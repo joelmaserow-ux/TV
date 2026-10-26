@@ -169,6 +169,12 @@
     <p class="hint">In the YouTube app on your phone: Share → Copy link, then paste it here.</p>
   </section>
 
+  <section id="netflixSection" class="hidden">
+    <h2>Netflix — who's watching?</h2>
+    <div id="netflixProfiles" class="row" style="--cols:3"></div>
+    <p class="hint">Opens Netflix and picks the profile for you (about 20 seconds).</p>
+  </section>
+
   <section>
     <h2>Apps</h2>
     <div id="apps" class="row" style="--cols:3">
@@ -263,6 +269,10 @@
     if (b.dataset.keys) call({ action: "key", keys: b.dataset.keys.split(",") }, true);
     else if (b.dataset.step) call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume);
     else if (b.dataset.app) call({ action: "app", name: b.dataset.app });
+    else if (b.dataset.netflix) {
+      toast("Opening Netflix as " + b.dataset.netflix + "…");
+      call({ action: "netflix_profile", profile: b.dataset.netflix });
+    }
     else if (b.dataset.action === "off") {
       if (confirm("Turn the TV off?")) call({ action: "off" }).then(refresh);
     }
@@ -356,6 +366,20 @@
     });
     if (bad.has("KEY_POWEROFF")) document.querySelector('[data-action="off"]').classList.add("hidden");
     renderApps(caps.found_apps);
+    renderNetflix(caps.netflix_profiles || []);
+  }
+
+  function renderNetflix(profiles) {
+    const box = $("netflixProfiles");
+    box.innerHTML = "";
+    for (const name of profiles) {
+      const b = document.createElement("button");
+      b.className = "small";
+      b.dataset.netflix = name;
+      b.textContent = name;
+      box.append(b);
+    }
+    $("netflixSection").classList.toggle("hidden", !profiles.length);
   }
 
   // One button per app the TV says it can open, then "All apps" (Smart Hub) for the rest.

@@ -99,6 +99,14 @@ async def open_app(app: str, params: str = "") -> str:
 
 
 @mcp.tool()
+async def open_netflix(profile: str) -> str:
+    """Open Netflix and pick a profile (Jad, Bianca, Lee, Ben or Joel, unless reconfigured)."""
+    from . import netflix
+
+    return await run(netflix.open_as, tv(), profile)
+
+
+@mcp.tool()
 async def list_apps() -> str:
     """List the apps this TV can open directly with open_app (others are reached via Smart Hub)."""
     from .apps import find_apps

@@ -15,7 +15,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import keymap
+from . import keymap, netflix
 from .config import Settings
 from .encrypted import credentials_path
 from .legacy import TVError, normalize_key
@@ -65,6 +65,8 @@ class RemoteApp:
                     return self.tv.open_app(str(body["name"]))
                 case "youtube":
                     return self.tv.play_youtube(str(body["url"]))
+                case "netflix_profile":
+                    return netflix.open_as(self.tv, str(body["profile"]))
                 case "youtube_link":
                     return self.tv.link_youtube(str(body["code"]))
                 case "search":
@@ -77,6 +79,8 @@ class RemoteApp:
                     return json.dumps({
                         "unsupported": keymap.unsupported(data),
                         "found_apps": self.found_apps,
+                        "netflix_profiles": netflix.load(self.tv.s.host)["profiles"]
+                        if any(a["id"] == "Netflix" for a in self.found_apps or []) else [],
                         "apps": data.get("apps", {}),
                         "typing": data.get("typing"),
                     })

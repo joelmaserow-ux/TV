@@ -63,3 +63,52 @@ def test_unknown_profile_presses_nothing():
     with pytest.raises(ValueError):
         netflix.open_as(tv, "Sam")
     assert tv.events == []
+
+
+def test_normalize_title():
+    assert netflix.normalize_title("  Rick & Morty: Season 7! ") == "rick and morty season 7"
+    assert netflix.normalize_title("Amélie") == "amelie"
+
+
+def test_type_keys_walks_the_keyboard():
+    R, L, U, D, OK = "KEY_RIGHT", "KEY_LEFT", "KEY_UP", "KEY_DOWN", "KEY_ENTER"
+    # a -> r is 5 right, 2 down; r -> i is 3 left, 1 up.
+    assert netflix.type_keys("ri") == [R] * 5 + [D] * 2 + [OK] + [L] * 3 + [U] + [OK]
+    # Space always from the "a" column: up, OK, back down onto "a".
+    assert netflix.type_keys("b b") == [R, OK, L, U, OK, D, R, OK]
+    assert netflix.type_keys("a0") == [OK] + [R] * 5 + [D] * 5 + [OK]
+
+
+def test_type_keys_types_rick_and_morty():
+    # Replay the presses on a model of the keyboard and read back what got typed.
+    rows = [" "] + netflix.KEYBOARD  # row 0: the wide Space key
+    r, c, typed = 1, 0, ""
+    for key in netflix.type_keys("Rick and Morty"):
+        if key == "KEY_RIGHT": c += 1
+        elif key == "KEY_LEFT": c -= 1
+        elif key == "KEY_DOWN": r += 1
+        elif key == "KEY_UP": r -= 1
+        else:
+            typed += " " if r == 0 else rows[r][c]
+        assert 0 <= r <= 6 and 0 <= c <= 5  # never leaves the keyboard
+        if r == 0:
+            assert c == 0
+    assert typed == "rick and morty"
+
+
+def test_watch_opens_profile_then_searches(monkeypatch):
+    monkeypatch.setattr(netflix.time, "sleep", lambda s: None)
+    tv = FakeTV()
+    msg = netflix.watch(tv, "Ben", "Rick and Morty")
+    assert "Ben" in msg and "rick and morty" in msg
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    after_profile = presses[presses.index("KEY_ENTER", 4) + 1:]  # first OK after the exit dialog is the profile pick
+    assert after_profile[:3] == netflix.TO_SEARCH
+    assert after_profile[3:-15] == netflix.type_keys("rick and morty")
+    assert after_profile[-15:] == netflix.TO_FIRST_RESULT
+
+
+def test_watch_without_title_just_opens_profile(monkeypatch):
+    monkeypatch.setattr(netflix.time, "sleep", lambda s: None)
+    tv = FakeTV()
+    assert netflix.watch(tv, "Joel") == "Opened Netflix as Joel."

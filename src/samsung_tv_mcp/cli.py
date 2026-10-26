@@ -30,8 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     nf = sub.add_parser("netflix", help="open Netflix as a profile, e.g. samsung-tv netflix Joel")
     nf.add_argument("profile")
     nf.add_argument("--wait", type=float, help="seconds Netflix needs to load before Exit (remembered)")
+    nf.add_argument("--show", default="", help="search for this show/movie and open it")
     nf.add_argument("--profile-wait", type=float,
                     help="seconds after reopening before choosing the profile (remembered)")
+    sub.add_parser("netflix-search", help="with Netflix's home screen showing, search and open a show").add_argument("show")
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
@@ -91,7 +93,10 @@ def main(argv: list[str] | None = None) -> int:
                     if args.profile_wait:
                         data["profile_wait"] = args.profile_wait
                     netflix.save(tv.s.host, data)
-                out = netflix.open_as(tv, args.profile)
+                out = netflix.watch(tv, args.profile, args.show)
+            case "netflix-search":
+                from . import netflix
+                out = netflix.search(tv, args.show)
             case "netflix-profiles":
                 from . import netflix
                 out = "Profiles, top to bottom: " + ", ".join(netflix.set_profiles(tv.s.host, args.names))

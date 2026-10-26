@@ -75,6 +75,8 @@
     -webkit-box-orient: vertical; overflow: hidden; }
   .result .m { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .result > div { min-width: 0; }
+  button:disabled { opacity: .5; }
+  button.selected { background: var(--accent); color: var(--accent-text); }
   #toast:not(.show) { visibility: hidden; }
   #toast.show { transform: translateX(-50%) translateY(0); }
   .icon { width: 22px; height: 22px; fill: currentColor; }
@@ -172,7 +174,12 @@
   <section id="netflixSection" class="hidden">
     <h2>Netflix — who's watching?</h2>
     <div id="netflixProfiles" class="row" style="--cols:3"></div>
-    <p class="hint">Opens Netflix and picks the profile for you (about 50 seconds).</p>
+    <form id="netflixForm" style="margin-top:10px">
+      <input id="netflixShow" type="search" placeholder="Show or movie (optional)" aria-label="Netflix show or movie" autocomplete="off" enterkeyhint="go">
+      <button class="primary" type="submit" id="netflixGo">Watch</button>
+    </form>
+    <p class="hint" id="netflixHint">Pick who's watching, type a show, tap Watch. Netflix opens on the TV, picks the
+      profile and finds the show (1–2 minutes). Leave the show blank to just open Netflix.</p>
   </section>
 
   <section>
@@ -269,10 +276,7 @@
     if (b.dataset.keys) call({ action: "key", keys: b.dataset.keys.split(",") }, true);
     else if (b.dataset.step) call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume);
     else if (b.dataset.app) call({ action: "app", name: b.dataset.app });
-    else if (b.dataset.netflix) {
-      toast("Opening Netflix as " + b.dataset.netflix + "…");
-      call({ action: "netflix_profile", profile: b.dataset.netflix });
-    }
+    else if (b.dataset.netflix) pickNetflixProfile(b.dataset.netflix);
     else if (b.dataset.action === "off") {
       if (confirm("Turn the TV off?")) call({ action: "off" }).then(refresh);
     }
@@ -369,18 +373,51 @@
     renderNetflix(caps.netflix_profiles || []);
   }
 
+  let netflixProfile = "";
+  try { netflixProfile = localStorage.getItem("netflixProfile") || ""; } catch (e) {}
+
   function renderNetflix(profiles) {
     const box = $("netflixProfiles");
     box.innerHTML = "";
+    if (!profiles.includes(netflixProfile)) netflixProfile = "";
     for (const name of profiles) {
       const b = document.createElement("button");
-      b.className = "small";
+      b.type = "button";
+      b.className = "small" + (name === netflixProfile ? " selected" : "");
       b.dataset.netflix = name;
       b.textContent = name;
       box.append(b);
     }
     $("netflixSection").classList.toggle("hidden", !profiles.length);
   }
+
+  function pickNetflixProfile(name) {
+    netflixProfile = name;
+    try { localStorage.setItem("netflixProfile", name); } catch (e) {}
+    document.querySelectorAll("[data-netflix]").forEach((b) => b.classList.toggle("selected", b.dataset.netflix === name));
+  }
+
+  // While the TV is busy with a long routine, check back until it's done and say how it went.
+  function watchJob() {
+    $("netflixGo").disabled = true;
+    const poll = async () => {
+      const r = await call({ action: "job" }, true);
+      let job = null;
+      try { job = JSON.parse(r.message); } catch (e) {}
+      if (job && job.busy) { setTimeout(poll, 3000); return; }
+      $("netflixGo").disabled = false;
+      if (job && job.last) toast(job.last.message, !job.last.ok);
+    };
+    setTimeout(poll, 3000);
+  }
+
+  $("netflixForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!netflixProfile) { toast("Pick who's watching first", true); return; }
+    $("netflixShow").blur();
+    const r = await call({ action: "netflix_watch", profile: netflixProfile, show: $("netflixShow").value.trim() });
+    if (r.ok) { $("netflixShow").value = ""; watchJob(); }
+  });
 
   // One button per app the TV says it can open, then "All apps" (Smart Hub) for the rest.
   function renderApps(found) {

@@ -99,11 +99,15 @@ async def open_app(app: str, params: str = "") -> str:
 
 
 @mcp.tool()
-async def open_netflix(profile: str) -> str:
-    """Open Netflix and pick a profile (Jad, Bianca, Lee, Ben or Joel, unless reconfigured)."""
+async def open_netflix(profile: str, show: str = "") -> str:
+    """Open Netflix as a profile (Jad, Bianca, Lee, Ben or Joel, unless reconfigured).
+
+    With `show`, it then searches Netflix for it and opens the first result. This drives the
+    TV's on-screen keyboard and takes 1-2 minutes; don't send other keys meanwhile.
+    """
     from . import netflix
 
-    return await run(netflix.open_as, tv(), profile)
+    return await run(netflix.watch, tv(), profile, show)
 
 
 @mcp.tool()

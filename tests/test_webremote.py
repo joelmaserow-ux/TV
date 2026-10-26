@@ -105,3 +105,30 @@ def test_capabilities_include_found_apps(server):
     # The handler's app is reachable through the server fixture only via requests; set via action.
     code, data = post(base, {"action": "capabilities"})
     assert code == 200 and json.loads(data["message"])["found_apps"] is None
+
+
+def test_netflix_watch_runs_in_background_and_blocks_other_keys(server, monkeypatch):
+    import threading as th
+    import samsung_tv_mcp.netflix as nf
+    base, tv = server
+    release = th.Event()
+
+    def slow_watch(tv_, profile, show):
+        release.wait(5)
+        return f"Opened Netflix as {profile}. Searched for {show}."
+
+    monkeypatch.setattr(nf, "watch", slow_watch)
+    code, data = post(base, {"action": "netflix_watch", "profile": "Ben", "show": "rick and morty"})
+    assert data["ok"] and "1–2 minutes" in data["message"]
+    # Keys are refused while it runs, but status still answers straight away.
+    assert "Busy" in post(base, {"action": "key", "keys": ["KEY_UP"]})[1]["message"]
+    assert post(base, {"action": "status"})[1]["ok"]
+    assert json.loads(post(base, {"action": "job"})[1]["message"])["busy"] is True
+    release.set()
+    for _ in range(50):
+        job = json.loads(post(base, {"action": "job"})[1]["message"])
+        if not job["busy"]:
+            break
+        th.Event().wait(0.05)
+    assert job["last"] == {"ok": True, "message": "Opened Netflix as Ben. Searched for rick and morty."}
+    assert post(base, {"action": "key", "keys": ["KEY_UP"]})[1]["ok"]

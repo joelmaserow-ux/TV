@@ -50,7 +50,8 @@ class FakeApi:
 
     async def connect(self):
         if self.listener and FakeApi.reports:
-            await self.listener.now_playing_changed(type("E", (), {"video_id": FakeApi.playing})())
+            state = type("S", (), {"name": "Playing" if FakeApi.playing else "Stopped"})()
+            await self.listener.now_playing_changed(type("E", (), {"video_id": FakeApi.playing, "state": state})())
         return True
 
     async def _command(self, command, params):
@@ -93,6 +94,14 @@ def test_play_without_now_playing_reports_sends_once(fake_api):
     fake_api.reports = False
     assert youtube.play("1.2.3.4", "jNQXAC9IVRw") is False
     assert [c for c in fake_api.calls if c[0] == "play"] == [("play", "jNQXAC9IVRw")]
+
+
+def test_queued_but_stopped_is_not_playing():
+    np = youtube._NowPlaying()
+    np.video_id, np.state = "jNQXAC9IVRw", "Stopped"
+    assert not np.is_playing("jNQXAC9IVRw")
+    np.state = "Starting"
+    assert np.is_playing("jNQXAC9IVRw")
 
 
 def test_play_gives_up(fake_api):

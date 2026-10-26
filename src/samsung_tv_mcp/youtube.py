@@ -42,10 +42,17 @@ class _NowPlaying:
     def reset(self):
         self.seen = False
         self.video_id = None
+        self.state = None
 
     async def now_playing_changed(self, event):
         self.seen = True
         self.video_id = event.video_id
+        self.state = getattr(event.state, "name", None)
+        _log.debug("TV reports now playing %s (%s)", self.video_id, self.state)
+
+    def is_playing(self, video_id: str) -> bool:
+        # A queued video on the home screen reports our id with state Stopped.
+        return self.video_id == video_id and self.state not in ("Stopped", None)
 
     def __getattr__(self, name):
         # Every other EventListener callback: ignore.
@@ -123,7 +130,7 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
             listener.reset()
             await _connect(api)
             if attempt:
-                if listener.video_id == video_id:
+                if listener.is_playing(video_id):
                     await _disconnect(api)
                     return True
                 if not listener.seen:

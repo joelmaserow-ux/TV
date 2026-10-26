@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import socket
 import time
@@ -234,8 +235,9 @@ class TV:
                 raise TVError("The TV's YouTube app opened but never came online for casting.")
             time.sleep(2)
         if just_opened:
-            # "Online" comes before the app can take a video; youtube.play also retries.
-            time.sleep(4)
+            # "Online" comes long before the app can take a video: anything sent while it is
+            # still starting up gets replaced by the home screen. youtube.play also retries.
+            time.sleep(float(os.environ.get("SAMSUNG_TV_YOUTUBE_STARTUP", "15")))
 
     def link_youtube(self, code: str) -> str:
         name = youtube.link(self.s.host, code)

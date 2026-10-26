@@ -18,6 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("diagnose", help="probe the TV and test pairing")
     sub.add_parser("pair", help="PIN-pair with TVs that use encrypted firmware")
+    sub.add_parser("install-claude", help="add this server to Claude Desktop's config")
     sub.add_parser("status")
     sub.add_parser("off")
     sub.add_parser("on")
@@ -49,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(tv.pair_start())
                 print(tv.pair_finish(input("PIN shown on the TV: ")))
                 out = tv.diagnose()
+            case "install-claude":
+                from .install import install
+                out = install(tv.s.host)
             case "status":
                 out = tv.status()
             case "off":

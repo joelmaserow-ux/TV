@@ -114,14 +114,10 @@ async def _connect(api) -> None:
             raise TVError("Couldn't connect to the TV's YouTube app. Make sure it's open, or relink it.")
 
 
-async def _disconnect(api) -> None:
-    try:
-        await api.disconnect()
-    except Exception:
-        pass
-
-
 async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) -> bool:
+    # Never send the lounge "terminate" (api.disconnect): older TV apps treat the remote
+    # leaving as the end of the session and drop back to the account picker. Sessions we
+    # just stop using expire on YouTube's side without touching playback.
     listener = _NowPlaying()
     async with _api(listener) as api:
         api.load_auth_state(json.loads(_auth_path(host).read_text()))
@@ -131,11 +127,9 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
             await _connect(api)
             if attempt:
                 if listener.is_playing(video_id):
-                    await _disconnect(api)
                     return True
                 if not listener.seen:
                     # This TV doesn't report what it's playing; trust the first request.
-                    await _disconnect(api)
                     return False
             if attempt == attempts:
                 break
@@ -152,9 +146,6 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
                 "playerParams": "",
             })
             if not ok:
-                await _disconnect(api)
                 raise TVError("YouTube refused to start the video.")
             await asyncio.sleep(5)
-            await _disconnect(api)
-        await _disconnect(api)
         raise TVError("The TV's YouTube app kept ignoring the video. Try again in a few seconds.")

@@ -78,8 +78,8 @@ def test_link_then_play(fake_api, tmp_path):
     assert youtube.link("1.2.3.4", "123 456 789 012") == "Living Room TV"
     assert json.loads((tmp_path / "1.2.3.4.youtube.json").read_text())["screenId"] == "abc"
     assert youtube.play("1.2.3.4", "jNQXAC9IVRw") is True
-    assert fake_api.calls == [("pair", "123456789012"), ("load", "abc"), ("play", "jNQXAC9IVRw"),
-                              ("disconnect",), ("disconnect",)]
+    # No "terminate": it sends older TV apps back to the account picker.
+    assert fake_api.calls == [("pair", "123456789012"), ("load", "abc"), ("play", "jNQXAC9IVRw")]
 
 
 def test_play_resends_until_app_takes_it(fake_api):

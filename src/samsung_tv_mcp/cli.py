@@ -29,7 +29,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("apps", help="list the apps this TV can open directly")
     nf = sub.add_parser("netflix", help="open Netflix as a profile, e.g. samsung-tv netflix Joel")
     nf.add_argument("profile")
-    nf.add_argument("--wait", type=float, help="seconds Netflix needs to show the profile screen (remembered)")
+    nf.add_argument("--wait", type=float, help="seconds Netflix needs to load before Exit (remembered)")
+    nf.add_argument("--profile-wait", type=float,
+                    help="seconds after reopening before choosing the profile (remembered)")
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
@@ -82,9 +84,12 @@ def main(argv: list[str] | None = None) -> int:
                 out = "\n".join(f"{a['name']}  (samsung-tv app {a['id']})" for a in found) or "None found."
             case "netflix":
                 from . import netflix
-                if args.wait:
+                if args.wait or args.profile_wait:
                     data = netflix.load(tv.s.host)
-                    data["startup_wait"] = args.wait
+                    if args.wait:
+                        data["startup_wait"] = args.wait
+                    if args.profile_wait:
+                        data["profile_wait"] = args.profile_wait
                     netflix.save(tv.s.host, data)
                 out = netflix.open_as(tv, args.profile)
             case "netflix-profiles":

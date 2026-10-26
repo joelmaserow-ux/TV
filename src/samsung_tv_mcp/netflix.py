@@ -27,6 +27,8 @@ def load(host: str) -> dict:
         data = {}
     data.setdefault("profiles", list(DEFAULT_PROFILES))
     data.setdefault("startup_wait", float(os.environ.get("SAMSUNG_TV_NETFLIX_STARTUP", "15")))
+    # The profile screen draws before it reacts to the remote, so give it longer.
+    data.setdefault("profile_wait", float(os.environ.get("SAMSUNG_TV_NETFLIX_PROFILE_WAIT", "20")))
     return data
 
 
@@ -47,14 +49,16 @@ def set_profiles(host: str, names: list[str]) -> list[str]:
 
 
 def profile_keys(profiles: list[str], name: str) -> list[str]:
-    """Presses that pick `name` on the profile screen, whichever profile starts highlighted."""
+    """Presses that pick `name` on the profile screen, whichever profile starts highlighted.
+
+    Down past the end first (one extra for safety) parks the highlight on the last profile
+    wherever it started; then Up to the wanted one and OK.
+    """
     lowered = [p.lower() for p in profiles]
     if name.strip().lower() not in lowered:
         raise ValueError(f"No Netflix profile called {name!r}. Profiles: {', '.join(profiles)}.")
     index = lowered.index(name.strip().lower())
-    # Assumes Up stops at the top rather than wrapping, so this lands on the first profile
-    # wherever the highlight starts (`samsung-tv netflix <name>` checks it on the real TV).
-    return ["KEY_UP"] * len(profiles) + ["KEY_DOWN"] * index + ["KEY_ENTER"]
+    return ["KEY_DOWN"] * (len(profiles) + 1) + ["KEY_UP"] * (len(profiles) - 1 - index) + ["KEY_ENTER"]
 
 
 def _fully_exit(tv, wait: float) -> None:
@@ -77,10 +81,13 @@ def _fully_exit(tv, wait: float) -> None:
 def open_as(tv, name: str) -> str:
     data = load(tv.s.host)
     keys = profile_keys(data["profiles"], name)
-    wait = float(data["startup_wait"])
-    _fully_exit(tv, wait)
+    _fully_exit(tv, float(data["startup_wait"]))
     tv._launch("Netflix")
-    time.sleep(wait)
-    tv.press(keys, delay=0.5)
+    time.sleep(float(data["profile_wait"]))
+    # One press per connection with a gap, like a person pressing the remote; a burst sent
+    # in one go was ignored by the profile screen.
+    for key in keys:
+        tv.press([key])
+        time.sleep(0.6)
     chosen = next(p for p in data["profiles"] if p.lower() == name.strip().lower())
     return f"Opened Netflix as {chosen}."

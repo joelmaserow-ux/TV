@@ -17,7 +17,7 @@ TEST_VIDEO = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"  # Big Buck Bunny, 10
 def _start_test_video(tv: TV, ask, say) -> None:
     """Get a video playing for the playback buttons, without relying on anyone opening YouTube."""
     if youtube.is_linked(tv.s.host):
-        say("\n>> Starting a test video on the TV (this can take up to 40 seconds)...")
+        say("\n>> Starting a test video on the TV (up to 2 minutes if the TV has just been turned on)...")
         try:
             say("   " + tv.play_youtube(TEST_VIDEO))
         except TVError as exc:

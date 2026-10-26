@@ -176,3 +176,35 @@ def test_dial_launch_timeout_but_running(samsung_dial, monkeypatch):
     dial = Dial("127.0.0.1", samsung_dial, timeout=0.5)
     monkeypatch.setattr(Dial, "LAUNCH_TIMEOUT", 0.5)
     assert dial.launch("Slow").endswith("/ws/app/Slow")
+
+
+def test_wait_for_apps_nudges_smart_hub_then_succeeds(monkeypatch):
+    import samsung_tv_mcp.tv as tvmod
+    tv = _tv("http://127.0.0.1:1")
+    clock = [0.0]
+    monkeypatch.setattr(tvmod.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tvmod.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    pressed = []
+    monkeypatch.setattr(tv, "press", lambda keys, delay=0.4: pressed.extend(keys))
+    monkeypatch.setattr(tv.dial, "ready", lambda: clock[0] >= 20)
+    tv.wait_for_apps()
+    assert pressed == ["KEY_CONTENTS"]
+
+
+def test_wait_for_apps_gives_clear_error(monkeypatch):
+    import samsung_tv_mcp.tv as tvmod
+    tv = _tv("http://127.0.0.1:1")
+    clock = [0.0]
+    monkeypatch.setattr(tvmod.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tvmod.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    monkeypatch.setattr(tv, "press", lambda keys, delay=0.4: None)
+    monkeypatch.setattr(tv.dial, "ready", lambda: False)
+    with pytest.raises(Exception, match="Unplug the TV"):
+        tv.wait_for_apps()
+
+
+def test_dial_falls_back_to_known_url_when_discovery_fails(monkeypatch):
+    import samsung_tv_mcp.upnp as upnp
+    monkeypatch.setattr(upnp, "ssdp_search", lambda *a, **k: [])
+    monkeypatch.setattr(upnp, "_port_open", lambda host, port, timeout=2.0: port == 8080)
+    assert Dial("10.9.9.9")._base() == "http://10.9.9.9:8080/ws/app/"

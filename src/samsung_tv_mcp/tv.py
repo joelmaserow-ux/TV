@@ -196,7 +196,7 @@ class TV:
             return f"Opened {app}."
         name = APP_ALIASES.get(key, app.strip())
         try:
-            self.dial.launch(name, params)
+            self._launch(name, params)
             return f"Launched {name}."
         except TVError as exc:
             self.press(["KEY_CONTENTS"])
@@ -223,17 +223,52 @@ class TV:
                 return f"Playing {link} on the TV."
             return f"Sent {link} to the TV's YouTube app (it doesn't confirm playback)."
         params = f"v={video_id}" + (f"&t={start}" if start else "")
-        self.dial.launch("YouTube", params)
+        self._launch("YouTube", params)
         return (
             f"Asked the TV to play {link}. If the TV says 'This video is unavailable', its YouTube app "
             "can't take videos this way: link it once with link_youtube (code from YouTube > Settings "
             "> Link with TV code on the TV)."
         )
 
+    def wait_for_apps(self, timeout: float = 60.0) -> None:
+        """Wait for the TV's app-launch service, which starts after the picture does.
+
+        On these models it can also wait for Smart Hub to load, so nudge it once if it's slow.
+        """
+        start = time.monotonic()
+        nudged = False
+        while not self.dial.ready():
+            waited = time.monotonic() - start
+            if waited > timeout:
+                raise TVError(
+                    "The TV's app service never started. Unplug the TV at the wall for 30 seconds "
+                    "to fully restart it (standby isn't enough), then try again."
+                )
+            if not nudged and waited > 6:
+                nudged = True
+                try:
+                    self.press(["KEY_CONTENTS"])
+                except TVError:
+                    pass
+            time.sleep(2)
+
+    def _launch(self, name: str, params: str = "") -> None:
+        self.wait_for_apps()
+        try:
+            self.dial.launch(name, params)
+        except TVError as exc:
+            if "refused" not in str(exc).lower():
+                raise
+            # The service can drop connections for a moment while Smart Hub settles.
+            time.sleep(3)
+            self.wait_for_apps()
+            self.dial.launch(name, params)
+
     def _ensure_youtube_open(self, wait: float = 25.0) -> None:
+        self.wait_for_apps()
         just_opened = self.dial.status("YouTube") != "running"
         if just_opened:
-            self.dial.launch("YouTube")
+            self._launch("YouTube")
         deadline = time.monotonic() + wait
         while not youtube.is_online(self.s.host):
             if time.monotonic() > deadline:

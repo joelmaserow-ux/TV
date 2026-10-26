@@ -7,7 +7,7 @@ import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from xml.sax.saxutils import escape
 
 from .legacy import TVError
@@ -49,6 +49,14 @@ def ssdp_search(st: str, host: str, timeout: float = 3.0) -> list[dict[str, str]
             if headers.get("st", "").lower() == st.lower() and headers not in results:
                 results.append(headers)
     return results
+
+
+def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), min(timeout, 2.0)):
+            return True
+    except OSError:
+        return False
 
 
 def parse_http_headers(text: str) -> dict[str, str]:
@@ -174,10 +182,21 @@ class Dial:
             if url:
                 self.app_url = url
                 return url
+        # Discovery is flaky right after power-on; Samsung TVs of this era serve DIAL here.
+        if _port_open(self.host, 8080, self.timeout):
+            return f"http://{self.host}:8080/ws/app/"
         raise TVError(
-            "The TV did not answer DIAL discovery, so apps cannot be launched directly. Make sure the "
-            "TV is on, or set SAMSUNG_TV_DIAL_URL."
+            "The TV's app service isn't answering yet (it starts a little after the picture). "
+            "Make sure the TV is on, or set SAMSUNG_TV_DIAL_URL."
         )
+
+    def ready(self) -> bool:
+        """True once the app service accepts connections."""
+        try:
+            url = urlparse(self._base())
+        except TVError:
+            return False
+        return _port_open(url.hostname or self.host, url.port or 80, self.timeout)
 
     # Launching can block until the app has loaded, which takes a while on these TVs.
     LAUNCH_TIMEOUT = 25.0

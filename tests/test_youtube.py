@@ -121,5 +121,6 @@ def test_tv_uses_lounge_when_linked(fake_api, monkeypatch):
                      timeout=1, rendering_control_url=None, dial_url="http://127.0.0.1:1/ws/app/"))
     youtube.link("1.2.3.4", "123456789012")
     monkeypatch.setattr(tv.dial, "status", lambda name: "running")
+    monkeypatch.setattr(tv.dial, "ready", lambda: True)
     assert tv.play_youtube("https://youtu.be/jNQXAC9IVRw") == "Playing https://youtu.be/jNQXAC9IVRw on the TV."
     assert ("play", "jNQXAC9IVRw") in fake_api.calls

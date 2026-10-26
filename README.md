@@ -57,6 +57,9 @@ This is the fastest route and what was used on the UA55H6300. The longer manual 
    }
    ```
    If Claude can't find `uvx`, use its full path (`where.exe uvx` on Windows, `which uvx` on Mac).
+   On Microsoft Store installs the real file is the one **Settings → Developer → Edit config** opens
+   (e.g. `%LOCALAPPDATA%\Claude-Data\claude_<id>\claude_desktop_config.json`). If the server
+   doesn't show up, quit Claude Desktop and pass that path: `samsung-tv install-claude --config "<path>"`.
 
 After an update to this repo, run any command once with `uvx --refresh --from $tv ...` to pick it up.
 

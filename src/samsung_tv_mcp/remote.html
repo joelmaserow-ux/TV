@@ -249,7 +249,8 @@
 
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button");
-    if (!b || b.type === "submit") return;
+    // Form buttons (Search, Play, Unlock) have their own submit handlers.
+    if (!b || b.closest("form") || b.classList.contains("result")) return;
     buzz();
     if (b.dataset.keys) call({ action: "key", keys: b.dataset.keys.split(",") }, true);
     else if (b.dataset.step) call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume);

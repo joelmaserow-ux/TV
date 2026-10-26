@@ -111,6 +111,17 @@ async def open_netflix(profile: str, show: str = "") -> str:
 
 
 @mcp.tool()
+async def search_netflix(query: str) -> str:
+    """Look up what's on Netflix matching `query` (via JustWatch), to pick a title for open_netflix."""
+    from .netflix_search import search as find
+
+    found = await run(find, query)
+    if not found:
+        return "Nothing on Netflix matches that."
+    return "\n".join(f"{r['title']} ({r['kind']}, {r['year']})" for r in found)
+
+
+@mcp.tool()
 async def list_apps() -> str:
     """List the apps this TV can open directly with open_app (others are reached via Smart Hub)."""
     from .apps import find_apps

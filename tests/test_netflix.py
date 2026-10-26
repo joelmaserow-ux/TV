@@ -17,21 +17,53 @@ def test_profile_keys():
         netflix.profile_keys(profiles, "Sam")
 
 
+class FakeDial:
+    """Netflix's DIAL state: running once launched, stopped once Exit -> Right -> OK lands."""
+
+    def __init__(self, tv):
+        self.tv = tv
+
+    def status(self, name):
+        return self.tv.netflix_state
+
+
 class FakeTV:
-    def __init__(self):
+    def __init__(self, ignore_exits=0):
         self.s = type("S", (), {"host": "h"})()
         self.events = []
+        self.netflix_state = "stopped"
+        self.ignore_exits = ignore_exits  # Exit presses lost while Netflix is still loading
+        self.dial = FakeDial(self)
 
     def _launch(self, name, params=""):
         self.events.append(("launch", name))
+        self.netflix_state = "running"
 
     def press(self, keys, delay=0.4):
         self.events.append(("press", keys))
+        recent = [e[1][0] for e in self.events[-3:] if e[0] == "press"]
+        if recent == ["KEY_EXIT", "KEY_RIGHT", "KEY_ENTER"]:
+            if self.ignore_exits:
+                self.ignore_exits -= 1
+            else:
+                self.netflix_state = "stopped"
+
+
+def _fake_clock(monkeypatch):
+    clock = [0.0]
+    slept = []
+    monkeypatch.setattr(netflix.time, "monotonic", lambda: clock[0])
+
+    def sleep(t):
+        slept.append(t)
+        clock[0] += t
+
+    monkeypatch.setattr(netflix.time, "sleep", sleep)
+    return slept
 
 
 def test_open_as_quits_netflix_properly_then_picks_profile(monkeypatch):
-    slept = []
-    monkeypatch.setattr(netflix.time, "sleep", slept.append)
+    slept = _fake_clock(monkeypatch)
     tv = FakeTV()
     assert netflix.open_as(tv, "bianca") == "Opened Netflix as Bianca."
     assert tv.events == [
@@ -41,12 +73,11 @@ def test_open_as_quits_netflix_properly_then_picks_profile(monkeypatch):
         ("press", ["KEY_ENTER"]),
         ("launch", "Netflix"),
     ] + [("press", [k]) for k in ["KEY_DOWN"] * 6 + ["KEY_UP"] * 3 + ["KEY_ENTER"]]
-    assert slept[:5] == [15.0, 1.5, 0.5, 3, 20.0] and set(slept[5:]) == {0.6}
+    assert slept[:5] == [15.0, 1.5, 0.5, 2, 20.0] and set(slept[5:]) == {0.6}
 
 
 def test_profiles_and_wait_are_configurable(monkeypatch):
-    slept = []
-    monkeypatch.setattr(netflix.time, "sleep", slept.append)
+    slept = _fake_clock(monkeypatch)
     netflix.set_profiles("h", ["Mum", "Dad"])
     data = netflix.load("h")
     data["startup_wait"], data["profile_wait"] = 22, 30
@@ -97,7 +128,7 @@ def test_type_keys_types_rick_and_morty():
 
 
 def test_watch_opens_profile_then_searches(monkeypatch):
-    monkeypatch.setattr(netflix.time, "sleep", lambda s: None)
+    _fake_clock(monkeypatch)
     tv = FakeTV()
     msg = netflix.watch(tv, "Ben", "Rick and Morty")
     assert "Ben" in msg and "rick and morty" in msg
@@ -119,6 +150,32 @@ def test_to_first_result_goes_via_space_and_backspace():
 
 
 def test_watch_without_title_just_opens_profile(monkeypatch):
-    monkeypatch.setattr(netflix.time, "sleep", lambda s: None)
+    _fake_clock(monkeypatch)
     tv = FakeTV()
     assert netflix.watch(tv, "Joel") == "Opened Netflix as Joel."
+
+
+def test_exit_is_retried_until_netflix_really_quits(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV(ignore_exits=1)
+    netflix.open_as(tv, "Joel")
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    assert presses[:6] == ["KEY_EXIT", "KEY_RIGHT", "KEY_ENTER"] * 2
+    assert [e for e in tv.events if e[0] == "launch"] == [("launch", "Netflix")] * 2
+
+
+def test_gives_up_without_pressing_profile_keys_if_netflix_never_quits(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV(ignore_exits=99)
+    with pytest.raises(netflix.TVError, match="didn't quit"):
+        netflix.open_as(tv, "Joel")
+    assert "KEY_DOWN" not in [e[1][0] for e in tv.events if e[0] == "press"]
+
+
+def test_tv_that_never_reports_running_gets_one_exit(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV()
+    tv._launch = lambda name, params="": tv.events.append(("launch", name))  # state stays "stopped"
+    netflix.open_as(tv, "Joel")
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    assert presses[:3] == ["KEY_EXIT", "KEY_RIGHT", "KEY_ENTER"] and presses[3] == "KEY_DOWN"

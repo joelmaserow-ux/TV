@@ -71,6 +71,8 @@
     padding: 6px; min-height: 0; font-weight: 500; background: transparent; }
   .result:active { background: var(--btn); }
   .result img { width: 112px; height: 63px; object-fit: cover; border-radius: 8px; background: var(--btn); }
+  .result.poster { grid-template-columns: 56px 1fr; }
+  .result.poster img { width: 56px; height: 80px; }
   .result .t { font-weight: 600; font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden; }
   .result .m { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -175,11 +177,13 @@
     <h2>Netflix — who's watching?</h2>
     <div id="netflixProfiles" class="row" style="--cols:3"></div>
     <form id="netflixForm" style="margin-top:10px">
-      <input id="netflixShow" type="search" placeholder="Show or movie (optional)" aria-label="Netflix show or movie" autocomplete="off" enterkeyhint="go">
-      <button class="primary" type="submit" id="netflixGo">Watch</button>
+      <input id="netflixShow" type="search" placeholder="Search Netflix" aria-label="Search Netflix" autocomplete="off" enterkeyhint="search">
+      <button class="primary" type="submit" id="netflixGo">Search</button>
     </form>
-    <p class="hint" id="netflixHint">Pick who's watching, type a show, tap Watch. Netflix opens on the TV, picks the
-      profile and finds the show (1–2 minutes). Leave the show blank to just open Netflix.</p>
+    <div id="netflixResults" class="results"></div>
+    <button type="button" class="small" id="netflixOpen" style="width:100%; margin-top:10px">Just open Netflix</button>
+    <p class="hint">Pick who's watching, search, then tap a show. The TV opens Netflix, picks the profile and
+      finds the show (1–2 minutes).</p>
   </section>
 
   <section>
@@ -399,25 +403,62 @@
 
   // While the TV is busy with a long routine, check back until it's done and say how it went.
   function watchJob() {
-    $("netflixGo").disabled = true;
+    $("netflixOpen").disabled = true;
     const poll = async () => {
       const r = await call({ action: "job" }, true);
       let job = null;
       try { job = JSON.parse(r.message); } catch (e) {}
       if (job && job.busy) { setTimeout(poll, 3000); return; }
-      $("netflixGo").disabled = false;
+      $("netflixOpen").disabled = false;
       if (job && job.last) toast(job.last.message, !job.last.ok);
     };
     setTimeout(poll, 3000);
   }
 
+  async function netflixWatch(show) {
+    if (!netflixProfile) { toast("Pick who's watching first", true); return; }
+    const r = await call({ action: "netflix_watch", profile: netflixProfile, show });
+    if (r.ok) { $("netflixResults").innerHTML = ""; $("netflixShow").value = ""; watchJob(); }
+  }
+
+  function resultButton(title, meta, img, poster, onPick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "result" + (poster ? " poster" : "");
+    const pic = document.createElement("img");
+    pic.alt = ""; pic.loading = "lazy";
+    pic.onerror = () => { pic.style.visibility = "hidden"; };
+    if (img) pic.src = img; else pic.style.visibility = "hidden";
+    const text = document.createElement("div");
+    const t = document.createElement("div"); t.className = "t"; t.textContent = title;
+    const m = document.createElement("div"); m.className = "m"; m.textContent = meta;
+    text.append(t, m);
+    b.append(pic, text);
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); buzz(); onPick(); });
+    return b;
+  }
+
   $("netflixForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!netflixProfile) { toast("Pick who's watching first", true); return; }
+    const q = $("netflixShow").value.trim();
+    if (!q) return;
     $("netflixShow").blur();
-    const r = await call({ action: "netflix_watch", profile: netflixProfile, show: $("netflixShow").value.trim() });
-    if (r.ok) { $("netflixShow").value = ""; watchJob(); }
+    const box = $("netflixResults");
+    box.innerHTML = '<p class="hint">Searching Netflix…</p>';
+    const r = await call({ action: "netflix_find", query: q }, true);
+    box.innerHTML = "";
+    let items = [];
+    if (r.ok) { try { items = JSON.parse(r.message); } catch (err) {} }
+    for (const v of items) {
+      box.append(resultButton(v.title, [v.kind, v.year].filter(Boolean).join(" · "), v.poster, true,
+        () => netflixWatch(v.title)));
+    }
+    // Always offer the typed name too, in case the catalogue search misses it or is down.
+    box.append(resultButton("Watch “" + q + "”", "Type exactly this into Netflix's search", "", true,
+      () => netflixWatch(q)));
   });
+
+  $("netflixOpen").addEventListener("click", () => netflixWatch(""));
 
   // One button per app the TV says it can open, then "All apps" (Smart Hub) for the rest.
   function renderApps(found) {

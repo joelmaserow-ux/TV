@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     nf.add_argument("--profile-wait", type=float,
                     help="seconds after reopening before choosing the profile (remembered)")
     sub.add_parser("netflix-search", help="with Netflix's home screen showing, search and open a show").add_argument("show")
+    sub.add_parser("netflix-find", help="look up Netflix shows (with posters) via JustWatch").add_argument("query")
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
@@ -97,6 +98,10 @@ def main(argv: list[str] | None = None) -> int:
             case "netflix-search":
                 from . import netflix
                 out = netflix.search(tv, args.show)
+            case "netflix-find":
+                from .netflix_search import search as find
+                found = find(args.query)
+                out = "\n".join(f"{r['title']} ({r['kind']}, {r['year']})  {r['poster']}" for r in found) or "Nothing found on Netflix."
             case "netflix-profiles":
                 from . import netflix
                 out = "Profiles, top to bottom: " + ", ".join(netflix.set_profiles(tv.s.host, args.names))

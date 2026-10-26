@@ -12,6 +12,7 @@ import os
 import time
 
 from .encrypted import credentials_path
+from .legacy import TVError
 
 DEFAULT_PROFILES = ["Jad", "Bianca", "Lee", "Ben", "Joel"]
 
@@ -64,21 +65,52 @@ def profile_keys(profiles: list[str], name: str) -> list[str]:
     return ["KEY_DOWN"] * (len(profiles) + 1) + ["KEY_UP"] * (len(profiles) - 1 - index) + ["KEY_ENTER"]
 
 
-def _fully_exit(tv, wait: float) -> None:
+def _state(tv) -> str:
+    try:
+        return tv.dial.status("Netflix")
+    except TVError:
+        return "unknown"
+
+
+def _wait_for_state(tv, wanted: str, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _state(tv) == wanted:
+            return True
+        time.sleep(1)
+    return _state(tv) == wanted
+
+
+def _fully_exit(tv, wait: float, attempts: int = 3) -> None:
     """Quit Netflix for real so the next launch starts on "Choose a Profile".
 
     Neither DIAL's stop nor a bare Exit key really quits Netflix on this TV: Exit asks
     "Are you sure you want to exit Netflix?", which needs Right then OK. Opening Netflix
-    first makes sure it's in front to receive that, whatever state it was in.
+    first makes sure it's in front to receive that. Exit pressed while Netflix is still
+    loading is ignored, so wait until the TV reports it running, and check it reports
+    stopped afterwards, trying again if not.
     """
     tv._launch("Netflix")
+    # Only trust the TV's running/stopped report for Netflix if it ever says "running".
+    reports_state = _wait_for_state(tv, "running", 30)
     time.sleep(wait)
-    tv.press(["KEY_EXIT"])
-    time.sleep(1.5)  # let the "Are you sure?" dialog appear
-    tv.press(["KEY_RIGHT"])
-    time.sleep(0.5)
-    tv.press(["KEY_ENTER"])
-    time.sleep(3)  # let it finish quitting before relaunching
+    for _ in range(attempts):
+        tv.press(["KEY_EXIT"])
+        time.sleep(1.5)  # let the "Are you sure?" dialog appear
+        tv.press(["KEY_RIGHT"])
+        time.sleep(0.5)
+        tv.press(["KEY_ENTER"])
+        if not reports_state:
+            time.sleep(3)
+            return
+        if _wait_for_state(tv, "stopped", 6):
+            time.sleep(2)  # let it finish quitting before relaunching
+            return
+        time.sleep(3)  # still open: probably still loading; give it a moment and retry
+    raise TVError(
+        "Netflix didn't quit, so it can't be opened on the profile screen. Exit Netflix with the "
+        "TV remote (Exit, then Yes) and try again."
+    )
 
 
 def open_as(tv, name: str) -> str:

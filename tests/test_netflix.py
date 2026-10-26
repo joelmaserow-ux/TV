@@ -229,3 +229,13 @@ def test_episode_without_show_is_refused_before_touching_tv():
     with pytest.raises(ValueError):
         netflix.watch(tv, "Ben", "Rick", season=0, episode=1)
     assert tv.events == []
+
+
+def test_watch_play_presses_ok_on_show_page(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV()
+    msg = netflix.watch(tv, "Ben", "Rick and Morty", play=True)
+    assert msg.endswith("Pressed Play (Continue / Start Watching).")
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    # search ends ... Right, Right, OK (open first result), then one more OK on the page.
+    assert presses[-4:] == ["KEY_RIGHT", "KEY_RIGHT", "KEY_ENTER", "KEY_ENTER"]

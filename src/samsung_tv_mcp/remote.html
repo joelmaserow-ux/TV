@@ -3,93 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#111318">
+<meta name="theme-color" content="#0f1115">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <title>TV Remote</title>
 <style>
   :root {
-    --bg: #f3f4f6; --panel: #ffffff; --btn: #e8eaee; --btn-press: #d5d9e0;
-    --text: #15171c; --muted: #6b7280; --accent: #2563eb; --accent-text: #fff;
-    --danger: #dc2626; --ok: #16a34a; --ring: rgba(37, 99, 235, .35);
+    --bg: #f2f3f6; --panel: #ffffff; --btn: #e9ebef; --btn-press: #d6dae1; --line: #e2e5ea;
+    --text: #14161b; --muted: #6b7280; --accent: #2563eb; --accent-text: #fff; --netflix: #e50914;
+    --danger: #dc2626; --ok: #16a34a; --ring: rgba(37, 99, 235, .35); --shadow: 0 1px 2px rgba(0,0,0,.06);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0b0d11; --panel: #15181e; --btn: #232831; --btn-press: #313844;
-      --text: #eef0f4; --muted: #9aa3b2; --accent: #4f8bff; --accent-text: #fff;
-      --danger: #ef4444; --ok: #22c55e; --ring: rgba(79, 139, 255, .4);
+      --bg: #0b0d11; --panel: #15181e; --btn: #222731; --btn-press: #2f3642; --line: #232833;
+      --text: #eef0f4; --muted: #98a1b1; --accent: #4f8bff; --accent-text: #fff; --netflix: #e50914;
+      --danger: #ef4444; --ok: #22c55e; --ring: rgba(79, 139, 255, .4); --shadow: none;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 440px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-  h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
-  .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  main { max-width: 460px; margin: 0 auto; padding: 12px 16px calc(96px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; gap: 10px; padding: 4px 0 12px; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; letter-spacing: -.01em; }
+  .status { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
   .dot.on { background: var(--ok); } .dot.off { background: var(--danger); }
-  section { background: var(--panel); border-radius: 18px; padding: 14px; margin-bottom: 12px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
-    margin: 0 0 10px; font-weight: 600; }
+  .card { background: var(--panel); border-radius: 18px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
   .row { display: grid; gap: 10px; grid-template-columns: repeat(var(--cols, 3), 1fr); }
   .row + .row { margin-top: 10px; }
   button { appearance: none; border: 0; border-radius: 14px; background: var(--btn); color: var(--text);
-    font: inherit; font-weight: 600; min-height: 52px; padding: 8px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 6px; touch-action: manipulation;
+    font: inherit; font-weight: 600; min-height: 50px; padding: 8px 10px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; touch-action: manipulation;
     transition: background .08s, transform .08s; user-select: none; }
   button:active { background: var(--btn-press); transform: scale(.97); }
   button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+  button:disabled { opacity: .45; }
   button.primary { background: var(--accent); color: var(--accent-text); }
+  button.netflix { background: var(--netflix); color: #fff; }
   button.danger { background: var(--danger); color: #fff; }
-  button.small { min-height: 44px; font-size: 15px; }
-  .pad { display: grid; grid-template-columns: repeat(3, 76px); grid-template-rows: repeat(3, 76px);
-    gap: 10px; justify-content: center; }
-  .pad button { min-height: 0; font-size: 22px; }
-  .pad .ok { border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 17px; }
-  .vol { display: grid; grid-template-columns: 56px 1fr 56px; gap: 10px; align-items: center; }
-  input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
-  .vol-label { text-align: center; color: var(--muted); font-size: 14px; margin-top: 6px; }
+  button.small { min-height: 42px; font-size: 15px; }
+  button.icon { width: 44px; min-height: 44px; padding: 0; border-radius: 50%; }
+  button.chip { min-height: 38px; border-radius: 999px; padding: 6px 14px; font-size: 15px; white-space: nowrap; }
+  button.selected { background: var(--accent); color: var(--accent-text); }
+  .icon-svg { width: 22px; height: 22px; fill: currentColor; flex: none; }
+  .hidden { display: none !important; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
   form { display: flex; gap: 8px; }
-  form + form { margin-top: 10px; }
-  input[type=text], input[type=url], input[type=password], input[inputmode] {
+  input[type=text], input[type=search], input[type=url], input[inputmode] {
     flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--btn);
-    border: 2px solid transparent; border-radius: 12px; padding: 12px; }
+    border: 2px solid transparent; border-radius: 12px; padding: 12px; -webkit-appearance: none; }
   input:focus { outline: none; border-color: var(--accent); }
   form button { min-width: 84px; }
-  .hint { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
-  .hidden { display: none !important; }
-  #toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom));
-    transform: translateX(-50%) translateY(120%); max-width: calc(100% - 32px); background: var(--text);
-    color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px; transition: transform .2s;
-    box-shadow: 0 6px 24px rgba(0,0,0,.25); }
-  input[type=search] { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--btn);
-    border: 2px solid transparent; border-radius: 12px; padding: 12px; -webkit-appearance: none; }
-  .results { display: grid; gap: 8px; margin-top: 10px; }
+
+  /* Remote tab */
+  .vol { display: grid; grid-template-columns: 50px 1fr 50px; gap: 10px; align-items: center; }
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
+  .vol-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; color: var(--muted); font-size: 14px; }
+  .pad { display: grid; grid-template-columns: repeat(3, 74px); grid-template-rows: repeat(3, 74px);
+    gap: 10px; justify-content: center; margin: 4px 0 12px; }
+  .pad button { min-height: 0; font-size: 22px; border-radius: 18px; }
+  .pad .ok { border-radius: 50%; background: var(--accent); color: var(--accent-text); font-size: 17px; }
+
+  /* Results */
+  .results { display: grid; gap: 6px; margin-top: 10px; }
   .results:empty { display: none; }
-  .result { display: grid; grid-template-columns: 112px 1fr; gap: 10px; align-items: center; text-align: left;
-    padding: 6px; min-height: 0; font-weight: 500; background: transparent; }
+  .result { display: grid; grid-template-columns: 112px 1fr; gap: 12px; align-items: center; text-align: left;
+    padding: 6px; min-height: 0; font-weight: 500; background: transparent; border-radius: 12px; }
   .result:active { background: var(--btn); }
-  .result img { width: 112px; height: 63px; object-fit: cover; border-radius: 8px; background: var(--btn); }
-  .result.poster { grid-template-columns: 56px 1fr; }
-  .result.poster img { width: 56px; height: 80px; }
-  .result .t { font-weight: 600; font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical; overflow: hidden; }
-  .result .m { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .result img, .thumb { width: 112px; height: 63px; object-fit: cover; border-radius: 8px; background: var(--btn); display: block; }
+  .result.poster { grid-template-columns: 54px 1fr; }
+  .result.poster img { width: 54px; height: 80px; }
   .result > div { min-width: 0; }
-  button:disabled { opacity: .5; }
-  .episode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-  .episode-row label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 600; }
-  .episode-row input { flex: 1; min-width: 0; width: 100%; font: inherit; color: var(--text); background: var(--btn);
-    border: 2px solid transparent; border-radius: 12px; padding: 10px; }
-  button.selected { background: var(--accent); color: var(--accent-text); }
-  #toast:not(.show) { visibility: hidden; }
-  #toast.show { transform: translateX(-50%) translateY(0); }
-  .icon { width: 22px; height: 22px; fill: currentColor; }
+  .t { font-weight: 650; font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+  .m { color: var(--muted); font-size: 13px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+
+  /* Netflix title sheet */
+  #sheet { position: fixed; inset: 0; background: var(--bg); z-index: 8; overflow-y: auto;
+    padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); }
+  #sheet .inner { max-width: 460px; margin: 0 auto; }
+  .sheet-head { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .title-hero { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center; }
+  .title-hero img { width: 96px; height: 142px; object-fit: cover; border-radius: 10px; background: var(--btn); }
+  .title-hero h3 { margin: 0 0 4px; font-size: 20px; line-height: 1.2; }
+  .big { width: 100%; min-height: 56px; font-size: 17px; justify-content: flex-start; padding: 10px 16px; text-align: left; }
+  .big small { display: block; font-weight: 500; font-size: 13px; opacity: .85; }
+  .episode { display: grid; grid-template-columns: 124px 1fr; gap: 12px; align-items: center; text-align: left;
+    padding: 6px; background: transparent; min-height: 0; border-radius: 12px; font-weight: 500; width: 100%; }
+  .episode:active { background: var(--btn); }
+  .episode .thumb { width: 124px; height: 70px; }
+  .episode .s { color: var(--muted); font-size: 13px; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* Bottom tabs */
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--panel);
+    border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  nav.tabs .wrap { max-width: 460px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  nav.tabs button { flex-direction: column; gap: 2px; background: transparent; min-height: 54px; font-size: 12px;
+    color: var(--muted); border-radius: 12px; }
+  nav.tabs button.active { color: var(--accent); background: var(--btn); }
+
+  /* Busy banner, toast, lock */
+  #busy { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; background: var(--accent);
+    color: var(--accent-text); border-radius: 14px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+  .spin { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%;
+    animation: spin 1s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(20px); opacity: 0; max-width: calc(100% - 32px); background: var(--text);
+    color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px; transition: all .2s; z-index: 20;
+    box-shadow: 0 6px 24px rgba(0,0,0,.25); pointer-events: none; }
+  #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   #toast.err { background: var(--danger); color: #fff; }
   #lock { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center;
-    justify-content: center; padding: 16px; z-index: 10; }
-  #lock section { width: 100%; max-width: 360px; text-align: center; }
+    justify-content: center; padding: 16px; z-index: 30; }
+  #lock .card { width: 100%; max-width: 360px; text-align: center; }
   #lock p { color: var(--muted); margin: 0 0 14px; }
   details summary { cursor: pointer; color: var(--muted); font-size: 14px; font-weight: 600; list-style: none; }
   details summary::-webkit-details-marker { display: none; }
@@ -97,143 +129,196 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M11 2h2v10h-2zM6.3 5.3l1.4 1.4A7 7 0 1 0 16.3 6.7l1.4-1.4A9 9 0 1 1 6.3 5.3z"/></symbol>
+  <symbol id="i-remote" viewBox="0 0 24 24"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm4 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm-2 9v2h4v-2zm0 4v2h4v-2z"/></symbol>
+  <symbol id="i-youtube" viewBox="0 0 24 24"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2 26 26 0 0 0 2 12a26 26 0 0 0 .4 4.8 2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8A26 26 0 0 0 22 12a26 26 0 0 0-.4-4.8zM10 15V9l5.2 3z"/></symbol>
+  <symbol id="i-netflix" viewBox="0 0 24 24"><path d="M6 2h4l4 11V2h4v20c-1.3-.2-2.7-.3-4-.3L10 11v10.5c-1.4 0-2.7.2-4 .4z"/></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4 1.4-1.4-6-6 6-6z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></symbol>
+  <symbol id="i-rew" viewBox="0 0 24 24"><path d="M11 6v12L2.5 12zM21 6v12l-8.5-6z"/></symbol>
+  <symbol id="i-ff" viewBox="0 0 24 24"><path d="M13 6v12l8.5-6zM3 6v12l8.5-6z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></symbol>
+</svg>
+
 <div id="lock">
-  <section>
-    <h1 style="margin-bottom:8px">TV Remote</h1>
+  <div class="card">
+    <h1 style="margin:0 0 8px">TV Remote</h1>
     <p>Enter the PIN shown on the computer running the remote.</p>
     <form id="pinForm">
       <input id="pin" inputmode="numeric" autocomplete="off" placeholder="PIN" aria-label="PIN">
       <button class="primary" type="submit">Unlock</button>
     </form>
-  </section>
+  </div>
 </div>
 
 <main>
   <header>
-    <h1>TV Remote</h1>
-    <div class="status"><span id="dot" class="dot"></span><span id="statusText">Checking…</span></div>
+    <h1 id="tabTitle">Remote</h1>
+    <div class="status"><span id="dot" class="dot"></span><span id="statusText">…</span></div>
+    <button class="icon danger" data-action="off" aria-label="Turn TV off"><svg class="icon-svg"><use href="#i-power"/></svg></button>
   </header>
 
-  <section>
-    <div class="row" style="--cols:4">
-      <button class="danger" data-action="off" aria-label="Turn TV off">⏻ Off</button>
-      <button data-keys="KEY_SOURCE">Source</button>
-      <button data-keys="KEY_MENU">Menu</button>
-      <button data-keys="KEY_GUIDE">Guide</button>
-    </div>
-  </section>
+  <div id="busy" class="hidden" role="status"><span class="spin"></span><span id="busyText">Working…</span></div>
 
-  <section>
-    <h2>Volume</h2>
-    <div class="vol">
-      <button data-step="-2" aria-label="Volume down">−</button>
-      <input id="volume" type="range" min="0" max="100" value="10" aria-label="Volume">
-      <button data-step="2" aria-label="Volume up">+</button>
-    </div>
-    <div class="vol-label"><span id="volText">–</span> · <a href="#" id="muteLink" style="color:inherit">Mute</a></div>
-  </section>
-
-  <section>
-    <h2>Navigate</h2>
-    <div class="pad">
-      <span></span><button data-keys="KEY_UP" aria-label="Up">▲</button><span></span>
-      <button data-keys="KEY_LEFT" aria-label="Left">◀</button>
-      <button class="ok" data-keys="KEY_ENTER">OK</button>
-      <button data-keys="KEY_RIGHT" aria-label="Right">▶</button>
-      <span></span><button data-keys="KEY_DOWN" aria-label="Down">▼</button><span></span>
-    </div>
-    <div class="row" style="--cols:3; margin-top:12px">
-      <button class="small" data-keys="KEY_RETURN">↩ Back</button>
-      <button class="small" data-keys="KEY_CONTENTS">Smart Hub</button>
-      <button class="small" data-keys="KEY_EXIT">Exit</button>
-    </div>
-  </section>
-
-  <section>
-    <h2>Playback</h2>
-    <div class="row" style="--cols:4">
-      <button class="small" data-keys="KEY_REWIND" aria-label="Rewind"><svg class="icon" viewBox="0 0 24 24"><path d="M11 6v12L2.5 12zM21 6v12l-8.5-6z"/></svg></button>
-      <button class="small" data-keys="KEY_PLAY" aria-label="Play"><svg class="icon" viewBox="0 0 24 24"><path d="M7 5v14l12-7z"/></svg></button>
-      <button class="small" data-keys="KEY_PAUSE" aria-label="Pause"><svg class="icon" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></button>
-      <button class="small" data-keys="KEY_FF" aria-label="Fast forward"><svg class="icon" viewBox="0 0 24 24"><path d="M13 6v12l8.5-6zM3 6v12l8.5-6z"/></svg></button>
-    </div>
-  </section>
-
-  <section>
-    <h2>Search YouTube</h2>
-    <form id="searchForm">
-      <input id="searchText" type="search" placeholder="What do you want to watch?" aria-label="Search YouTube" autocomplete="off" enterkeyhint="search">
-      <button class="primary" type="submit">Search</button>
-    </form>
-    <div id="results" class="results"></div>
-  </section>
-
-  <section>
-    <h2>Watch</h2>
-    <form id="ytForm">
-      <input id="ytUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube link" autocomplete="off">
-      <button class="primary" type="submit">Play</button>
-    </form>
-    <p class="hint">In the YouTube app on your phone: Share → Copy link, then paste it here.</p>
-  </section>
-
-  <section id="netflixSection" class="hidden">
-    <h2>Netflix — who's watching?</h2>
-    <div id="netflixProfiles" class="row" style="--cols:3"></div>
-    <form id="netflixForm" style="margin-top:10px">
-      <input id="netflixShow" type="search" placeholder="Search Netflix" aria-label="Search Netflix" autocomplete="off" enterkeyhint="search">
-      <button class="primary" type="submit" id="netflixGo">Search</button>
-    </form>
-    <div class="episode-row">
-      <label>Season <input id="nfSeason" type="number" inputmode="numeric" min="1" placeholder="–"></label>
-      <label>Episode <input id="nfEpisode" type="number" inputmode="numeric" min="1" placeholder="–"></label>
-    </div>
-    <div id="netflixResults" class="results"></div>
-    <button type="button" class="small" id="netflixOpen" style="width:100%; margin-top:10px">Just open Netflix</button>
-    <p class="hint">Pick who's watching, search, then tap a show. For a series, fill in Season and Episode first to
-      play that episode (leave blank to just open the show). Takes 1–2 minutes.</p>
-  </section>
-
-  <section>
-    <h2>Apps</h2>
-    <div id="apps" class="row" style="--cols:3">
-      <button class="small" data-app="YouTube">YouTube</button>
-      <button class="small" data-app="Netflix">Netflix</button>
-      <button class="small" data-keys="KEY_CONTENTS">All apps</button>
-    </div>
-    <p class="hint" id="appsHint">Checking which apps this TV can open…</p>
-  </section>
-
-  <section>
-    <details>
-      <summary>Channels &amp; numbers ▾</summary>
-      <div class="row" style="--cols:3">
-        <button class="small" data-keys="KEY_1">1</button><button class="small" data-keys="KEY_2">2</button><button class="small" data-keys="KEY_3">3</button>
-        <button class="small" data-keys="KEY_4">4</button><button class="small" data-keys="KEY_5">5</button><button class="small" data-keys="KEY_6">6</button>
-        <button class="small" data-keys="KEY_7">7</button><button class="small" data-keys="KEY_8">8</button><button class="small" data-keys="KEY_9">9</button>
-        <button class="small" data-keys="KEY_CHDOWN">CH −</button><button class="small" data-keys="KEY_0">0</button><button class="small" data-keys="KEY_CHUP">CH +</button>
+  <!-- REMOTE -->
+  <section id="tab-remote" data-tab="remote">
+    <div class="card">
+      <div class="vol">
+        <button data-step="-2" aria-label="Volume down">−</button>
+        <input id="volume" type="range" min="0" max="100" value="10" aria-label="Volume">
+        <button data-step="2" aria-label="Volume up">+</button>
       </div>
-    </details>
+      <div class="vol-foot"><span id="volText">Volume</span><button class="small chip" id="muteBtn" type="button">Mute</button></div>
+    </div>
+
+    <div class="card">
+      <div class="pad">
+        <span></span><button data-keys="KEY_UP" aria-label="Up">▲</button><span></span>
+        <button data-keys="KEY_LEFT" aria-label="Left">◀</button>
+        <button class="ok" data-keys="KEY_ENTER">OK</button>
+        <button data-keys="KEY_RIGHT" aria-label="Right">▶</button>
+        <span></span><button data-keys="KEY_DOWN" aria-label="Down">▼</button><span></span>
+      </div>
+      <div class="row" style="--cols:3">
+        <button class="small" data-keys="KEY_RETURN"><svg class="icon-svg"><use href="#i-back"/></svg>Back</button>
+        <button class="small" data-keys="KEY_CONTENTS">Home</button>
+        <button class="small" data-keys="KEY_EXIT">Exit</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="--cols:4">
+        <button class="small" data-keys="KEY_REWIND" aria-label="Rewind"><svg class="icon-svg"><use href="#i-rew"/></svg></button>
+        <button class="small" data-keys="KEY_PLAY" aria-label="Play"><svg class="icon-svg"><use href="#i-play"/></svg></button>
+        <button class="small" data-keys="KEY_PAUSE" aria-label="Pause"><svg class="icon-svg"><use href="#i-pause"/></svg></button>
+        <button class="small" data-keys="KEY_FF" aria-label="Fast forward"><svg class="icon-svg"><use href="#i-ff"/></svg></button>
+      </div>
+      <div class="row" style="--cols:3">
+        <button class="small" data-keys="KEY_SOURCE">Source</button>
+        <button class="small" data-keys="KEY_MENU">Menu</button>
+        <button class="small" data-keys="KEY_GUIDE">Guide</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Channels &amp; numbers ▾</summary>
+        <div class="row" style="--cols:3">
+          <button class="small" data-keys="KEY_1">1</button><button class="small" data-keys="KEY_2">2</button><button class="small" data-keys="KEY_3">3</button>
+          <button class="small" data-keys="KEY_4">4</button><button class="small" data-keys="KEY_5">5</button><button class="small" data-keys="KEY_6">6</button>
+          <button class="small" data-keys="KEY_7">7</button><button class="small" data-keys="KEY_8">8</button><button class="small" data-keys="KEY_9">9</button>
+          <button class="small" data-keys="KEY_CHDOWN">CH −</button><button class="small" data-keys="KEY_0">0</button><button class="small" data-keys="KEY_CHUP">CH +</button>
+        </div>
+      </details>
+    </div>
   </section>
-  <section>
-    <details>
-      <summary>Fix YouTube ▾</summary>
-      <p class="hint" style="margin-top:0">If videos stop starting from this remote: on the TV open YouTube →
-        Settings → <b>Link with TV code</b>, then enter the code here.</p>
-      <form id="linkForm">
-        <input id="linkCode" inputmode="numeric" placeholder="123 456 789 012" aria-label="YouTube TV code" autocomplete="off">
-        <button type="submit">Link</button>
+
+  <!-- YOUTUBE -->
+  <section id="tab-youtube" data-tab="youtube" class="hidden">
+    <div class="card">
+      <form id="searchForm">
+        <input id="searchText" type="search" placeholder="Search YouTube" aria-label="Search YouTube" autocomplete="off" enterkeyhint="search">
+        <button class="primary" type="submit">Search</button>
       </form>
-    </details>
+      <div id="results" class="results"></div>
+    </div>
+    <div class="card">
+      <h2>Have a link?</h2>
+      <form id="ytForm">
+        <input id="ytUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube link" autocomplete="off">
+        <button type="submit">Play</button>
+      </form>
+    </div>
+    <div class="card">
+      <details>
+        <summary>Fix YouTube ▾</summary>
+        <p class="hint" style="margin-top:0">If videos stop starting: on the TV open YouTube → Settings →
+          <b>Link with TV code</b>, and enter the code here.</p>
+        <form id="linkForm">
+          <input id="linkCode" inputmode="numeric" placeholder="123 456 789 012" aria-label="YouTube TV code" autocomplete="off">
+          <button type="submit">Link</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <!-- NETFLIX -->
+  <section id="tab-netflix" data-tab="netflix" class="hidden">
+    <div id="noNetflix" class="card hidden"><p class="hint" style="margin:0">Netflix isn't available on this TV.</p></div>
+    <div id="netflixBody">
+      <div class="card">
+        <h2>Who's watching?</h2>
+        <div id="netflixProfiles" class="chips"></div>
+      </div>
+      <div class="card">
+        <form id="netflixForm">
+          <input id="netflixShow" type="search" placeholder="Search Netflix" aria-label="Search Netflix" autocomplete="off" enterkeyhint="search">
+          <button class="primary" type="submit" id="netflixGo">Search</button>
+        </form>
+        <div id="netflixResults" class="results"></div>
+        <p class="hint">Tap a show to play it or pick an episode.</p>
+      </div>
+      <button type="button" class="small" id="netflixOpen" style="width:100%">Just open Netflix</button>
+    </div>
+  </section>
+
+  <!-- APPS -->
+  <section id="tab-apps" data-tab="apps" class="hidden">
+    <div class="card">
+      <div id="apps" class="row" style="--cols:2"></div>
+      <p class="hint" id="appsHint">Checking which apps this TV can open…</p>
+    </div>
   </section>
 </main>
+
+<!-- Netflix title: play or choose an episode -->
+<div id="sheet" class="hidden" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="inner">
+    <div class="sheet-head">
+      <button class="icon" id="sheetBack" type="button" aria-label="Back"><svg class="icon-svg"><use href="#i-back"/></svg></button>
+      <h2 style="margin:0">Netflix · <span id="sheetWho"></span></h2>
+    </div>
+    <div class="card">
+      <div class="title-hero">
+        <img id="sheetPoster" alt="">
+        <div><h3 id="sheetTitle"></h3><div class="m" id="sheetMeta"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <button class="big netflix" id="sheetPlay" type="button"><svg class="icon-svg"><use href="#i-play"/></svg>
+        <span>Play<small>Continue watching, or start from the beginning</small></span></button>
+      <button class="big" id="sheetPick" type="button" style="margin-top:10px"><svg class="icon-svg"><use href="#i-list"/></svg>
+        <span>Choose an episode<small>Pick the season and episode</small></span></button>
+    </div>
+    <div id="episodeBox" class="card hidden">
+      <div id="seasonChips" class="chips"></div>
+      <div id="episodeList" class="results"></div>
+      <p class="hint" id="episodeHint">Episode list from TVmaze. If Netflix has fewer seasons in your country, pick one it has.</p>
+    </div>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="wrap">
+    <button data-goto="remote" class="active"><svg class="icon-svg"><use href="#i-remote"/></svg>Remote</button>
+    <button data-goto="youtube"><svg class="icon-svg"><use href="#i-youtube"/></svg>YouTube</button>
+    <button data-goto="netflix"><svg class="icon-svg"><use href="#i-netflix"/></svg>Netflix</button>
+    <button data-goto="apps"><svg class="icon-svg"><use href="#i-apps"/></svg>Apps</button>
+  </div>
+</nav>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
-  let pin = "";
-  try { pin = localStorage.getItem("tvPin") || ""; } catch (e) {}
+  const store = {
+    get(k) { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  let pin = store.get("tvPin");
 
   let toastTimer;
   function toast(msg, err) {
@@ -242,7 +327,7 @@
     t.textContent = msg;
     t.className = "show" + (err ? " err" : "");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.className = err ? "err" : ""; }, err ? 4500 : 1800);
+    toastTimer = setTimeout(() => { t.className = err ? "err" : ""; }, err ? 5000 : 2200);
   }
 
   async function call(body, quiet) {
@@ -262,106 +347,53 @@
       return { ok: false };
     }
   }
-
+  const json = (r) => { try { return JSON.parse(r.message); } catch (e) { return null; } };
   function buzz() { if (navigator.vibrate) navigator.vibrate(12); }
   function lock() { $("lock").classList.remove("hidden"); $("pin").focus(); }
 
+  // ---- tabs ----
+  const TITLES = { remote: "Remote", youtube: "YouTube", netflix: "Netflix", apps: "Apps" };
+  function showTab(name) {
+    if (!TITLES[name]) name = "remote";
+    document.querySelectorAll("[data-tab]").forEach((s) => s.classList.toggle("hidden", s.dataset.tab !== name));
+    document.querySelectorAll("[data-goto]").forEach((b) => b.classList.toggle("active", b.dataset.goto === name));
+    $("tabTitle").textContent = TITLES[name];
+    store.set("tab", name);
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
+
+  // ---- unlock ----
   $("pinForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     pin = $("pin").value.trim();
     const r = await call({ action: "status" }, true);
-    if (r.ok) {
-      try { localStorage.setItem("tvPin", pin); } catch (e) {}
-      $("lock").classList.add("hidden");
-      applyCapabilities();
-      refresh();
-    } else if (r.message === "Wrong PIN") {
-      toast("Wrong PIN", true);
-    }
+    if (r.ok) { store.set("tvPin", pin); $("lock").classList.add("hidden"); start(); }
+    else if (r.message === "Wrong PIN") toast("Wrong PIN", true);
   });
 
+  // ---- remote buttons ----
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button");
-    // Form buttons (Search, Play, Unlock) have their own submit handlers.
-    if (!b || b.closest("form") || b.classList.contains("result")) return;
-    buzz();
-    if (b.dataset.keys) call({ action: "key", keys: b.dataset.keys.split(",") }, true);
-    else if (b.dataset.step) call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume);
-    else if (b.dataset.app) call({ action: "app", name: b.dataset.app });
-    else if (b.dataset.netflix) pickNetflixProfile(b.dataset.netflix);
-    else if (b.dataset.action === "off") {
-      if (confirm("Turn the TV off?")) call({ action: "off" }).then(refresh);
-    }
+    if (!b || b.closest("form")) return;
+    if (b.dataset.keys) { buzz(); call({ action: "key", keys: b.dataset.keys.split(",") }, true); }
+    else if (b.dataset.step) { buzz(); call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume); }
+    else if (b.dataset.app) { buzz(); call({ action: "app", name: b.dataset.app }); }
+    else if (b.dataset.action === "off") { if (confirm("Turn the TV off?")) call({ action: "off" }).then(refresh); }
   });
-
-  $("muteLink").addEventListener("click", (e) => { e.preventDefault(); call({ action: "mute" }).then(refreshVolume); });
+  $("muteBtn").addEventListener("click", () => { buzz(); call({ action: "mute" }).then(refreshVolume); });
   $("volume").addEventListener("change", (e) => call({ action: "volume", level: +e.target.value }, true).then(refreshVolume));
   $("volume").addEventListener("input", (e) => { $("volText").textContent = "Volume " + e.target.value; });
-
-  $("ytForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const url = $("ytUrl").value.trim();
-    if (!url) return;
-    toast("Sending to the TV… this can take up to 30 seconds");
-    const r = await call({ action: "youtube", url });
-    if (r.ok) $("ytUrl").value = "";
-  });
-
-  $("linkForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const code = $("linkCode").value.trim();
-    if (!code) return;
-    const r = await call({ action: "youtube_link", code });
-    if (r.ok) $("linkCode").value = "";
-  });
-
-  $("searchForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const q = $("searchText").value.trim();
-    if (!q) return;
-    $("searchText").blur();
-    const box = $("results");
-    box.innerHTML = '<p class="hint">Searching…</p>';
-    const r = await call({ action: "search", query: q }, true);
-    box.innerHTML = "";
-    if (!r.ok) return;
-    let items = [];
-    try { items = JSON.parse(r.message); } catch (err) {}
-    if (!items.length) { box.innerHTML = '<p class="hint">No videos found.</p>'; return; }
-    for (const v of items) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "result";
-      const img = document.createElement("img");
-      img.alt = ""; img.loading = "lazy";
-      img.onerror = () => { img.style.visibility = "hidden"; };
-      img.src = "https://i.ytimg.com/vi/" + encodeURIComponent(v.id) + "/mqdefault.jpg";
-      const text = document.createElement("div");
-      const t = document.createElement("div"); t.className = "t"; t.textContent = v.title;
-      const m = document.createElement("div"); m.className = "m";
-      m.textContent = [v.channel, v.duration].filter(Boolean).join(" · ");
-      text.append(t, m);
-      b.append(img, text);
-      b.addEventListener("click", async (ev) => {
-        ev.stopPropagation();
-        buzz();
-        toast("Sending to the TV… this can take up to 30 seconds");
-        await call({ action: "youtube", url: "https://youtu.be/" + v.id });
-      });
-      box.append(b);
-    }
-  });
 
   async function refreshVolume() {
     const r = await call({ action: "get_volume" }, true);
     const m = r.ok && /Volume is (\d+)( \(muted\))?/.exec(r.message || "");
     if (m) {
       $("volume").value = m[1];
-      $("volText").textContent = "Volume " + m[1] + (m[2] ? " (muted)" : "");
-      $("muteLink").textContent = m[2] ? "Unmute" : "Mute";
+      $("volText").textContent = "Volume " + m[1] + (m[2] ? " · muted" : "");
+      $("muteBtn").textContent = m[2] ? "Unmute" : "Mute";
     }
   }
-
   async function refresh() {
     const r = await call({ action: "status" }, true);
     const on = r.ok && /is on/.test(r.message || "");
@@ -370,88 +402,85 @@
     if (on) refreshVolume();
   }
 
-  // Hide anything the button test found this TV doesn't do, so every visible button works.
-  async function applyCapabilities() {
-    const r = await call({ action: "capabilities" }, true);
-    if (!r.ok) return;
-    let caps;
-    try { caps = JSON.parse(r.message); } catch (e) { return; }
-    const bad = new Set(caps.unsupported || []);
-    document.querySelectorAll("[data-keys]").forEach((b) => {
-      if (b.dataset.keys.split(",").some((k) => bad.has(k))) b.classList.add("hidden");
-    });
-    if (bad.has("KEY_POWEROFF")) document.querySelector('[data-action="off"]').classList.add("hidden");
-    renderApps(caps.found_apps);
-    renderNetflix(caps.netflix_profiles || []);
-  }
-
-  let netflixProfile = "";
-  try { netflixProfile = localStorage.getItem("netflixProfile") || ""; } catch (e) {}
-
-  function renderNetflix(profiles) {
-    const box = $("netflixProfiles");
-    box.innerHTML = "";
-    if (!profiles.includes(netflixProfile)) netflixProfile = "";
-    for (const name of profiles) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "small" + (name === netflixProfile ? " selected" : "");
-      b.dataset.netflix = name;
-      b.textContent = name;
-      box.append(b);
-    }
-    $("netflixSection").classList.toggle("hidden", !profiles.length);
-  }
-
-  function pickNetflixProfile(name) {
-    netflixProfile = name;
-    try { localStorage.setItem("netflixProfile", name); } catch (e) {}
-    document.querySelectorAll("[data-netflix]").forEach((b) => b.classList.toggle("selected", b.dataset.netflix === name));
-  }
-
-  // While the TV is busy with a long routine, check back until it's done and say how it went.
-  function watchJob() {
-    $("netflixOpen").disabled = true;
-    const poll = async () => {
-      const r = await call({ action: "job" }, true);
-      let job = null;
-      try { job = JSON.parse(r.message); } catch (e) {}
-      if (job && job.busy) { setTimeout(poll, 3000); return; }
-      $("netflixOpen").disabled = false;
-      if (job && job.last) toast(job.last.message, !job.last.ok);
-    };
-    setTimeout(poll, 3000);
-  }
-
-  async function netflixWatch(show, isMovie) {
-    if (!netflixProfile) { toast("Pick who's watching first", true); return; }
-    // Season/episode only apply to series; blank means just open the show's page.
-    const season = show && !isMovie ? $("nfSeason").value.trim() : "";
-    const episode = show && !isMovie ? $("nfEpisode").value.trim() : "";
-    if ((season && +season < 1) || (episode && +episode < 1)) { toast("Season and episode start at 1", true); return; }
-    const r = await call({ action: "netflix_watch", profile: netflixProfile, show, season, episode });
-    if (r.ok) {
-      $("netflixResults").innerHTML = ""; $("netflixShow").value = "";
-      $("nfSeason").value = ""; $("nfEpisode").value = "";
-      watchJob();
-    }
-  }
-
-  function resultButton(title, meta, img, poster, onPick) {
+  // ---- shared result rows ----
+  function row({ title, meta, img, poster, onPick }) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "result" + (poster ? " poster" : "");
     const pic = document.createElement("img");
     pic.alt = ""; pic.loading = "lazy";
-    pic.onerror = () => { pic.style.visibility = "hidden"; };
-    if (img) pic.src = img; else pic.style.visibility = "hidden";
+    pic.onerror = () => pic.removeAttribute("src");
+    if (img) pic.src = img;
     const text = document.createElement("div");
     const t = document.createElement("div"); t.className = "t"; t.textContent = title;
-    const m = document.createElement("div"); m.className = "m"; m.textContent = meta;
+    const m = document.createElement("div"); m.className = "m"; m.textContent = meta || "";
     text.append(t, m);
     b.append(pic, text);
     b.addEventListener("click", (ev) => { ev.stopPropagation(); buzz(); onPick(); });
     return b;
+  }
+  function note(box, text) { box.innerHTML = ""; const p = document.createElement("p"); p.className = "hint"; p.textContent = text; box.append(p); }
+
+  // ---- YouTube ----
+  async function playYouTube(url) {
+    toast("Sending to the TV… up to 30 seconds");
+    await call({ action: "youtube", url });
+  }
+  $("searchForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = $("searchText").value.trim();
+    if (!q) return;
+    $("searchText").blur();
+    const box = $("results");
+    note(box, "Searching…");
+    const r = await call({ action: "search", query: q }, true);
+    const items = (r.ok && json(r)) || [];
+    if (!items.length) { note(box, r.ok ? "No videos found." : ""); return; }
+    box.innerHTML = "";
+    for (const v of items) {
+      box.append(row({ title: v.title, meta: [v.channel, v.duration].filter(Boolean).join(" · "),
+        img: "https://i.ytimg.com/vi/" + encodeURIComponent(v.id) + "/mqdefault.jpg",
+        onPick: () => playYouTube("https://youtu.be/" + v.id) }));
+    }
+  });
+  $("ytForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const url = $("ytUrl").value.trim();
+    if (url) { await playYouTube(url); $("ytUrl").value = ""; }
+  });
+  $("linkForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = $("linkCode").value.trim();
+    if (!code) return;
+    const r = await call({ action: "youtube_link", code });
+    if (r.ok) $("linkCode").value = "";
+  });
+
+  // ---- Netflix ----
+  let profile = store.get("netflixProfile");
+  let current = null;  // the title open in the sheet
+
+  function renderProfiles(profiles) {
+    const box = $("netflixProfiles");
+    box.innerHTML = "";
+    if (!profiles.includes(profile)) profile = "";
+    for (const name of profiles) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (name === profile ? " selected" : "");
+      b.textContent = name;
+      b.addEventListener("click", () => {
+        profile = name; store.set("netflixProfile", name);
+        box.querySelectorAll("button").forEach((x) => x.classList.toggle("selected", x === b));
+      });
+      box.append(b);
+    }
+  }
+
+  async function startNetflix(extra) {
+    if (!profile) { closeSheet(); showTab("netflix"); toast("Pick who's watching first", true); return; }
+    const r = await call(Object.assign({ action: "netflix_watch", profile }, extra), true);
+    if (r.ok) { closeSheet(); showBusy(r.message); watchJob(); }
   }
 
   $("netflixForm").addEventListener("submit", async (e) => {
@@ -460,53 +489,156 @@
     if (!q) return;
     $("netflixShow").blur();
     const box = $("netflixResults");
-    box.innerHTML = '<p class="hint">Searching Netflix…</p>';
+    note(box, "Searching Netflix…");
     const r = await call({ action: "netflix_find", query: q }, true);
+    const items = (r.ok && json(r)) || [];
     box.innerHTML = "";
-    let items = [];
-    if (r.ok) { try { items = JSON.parse(r.message); } catch (err) {} }
     for (const v of items) {
-      box.append(resultButton(v.title, [v.kind, v.year].filter(Boolean).join(" · "), v.poster, true,
-        () => netflixWatch(v.title, v.kind === "Movie")));
+      box.append(row({ title: v.title, meta: [v.kind, v.year].filter(Boolean).join(" · "), img: v.poster, poster: true,
+        onPick: () => openSheet(v) }));
     }
     // Always offer the typed name too, in case the catalogue search misses it or is down.
-    box.append(resultButton("Watch “" + q + "”", "Type exactly this into Netflix's search", "", true,
-      () => netflixWatch(q, false)));
+    box.append(row({ title: "“" + q + "”", meta: "Search Netflix for exactly this", poster: true,
+      onPick: () => openSheet({ title: q, kind: "", year: "", poster: "" }) }));
+  });
+  $("netflixOpen").addEventListener("click", () => startNetflix({ show: "" }));
+
+  function openSheet(v) {
+    current = v;
+    $("sheetWho").textContent = profile || "pick a profile";
+    $("sheetTitle").textContent = v.title;
+    $("sheetMeta").textContent = [v.kind, v.year].filter(Boolean).join(" · ");
+    const img = $("sheetPoster");
+    if (v.poster) img.src = v.poster; else img.removeAttribute("src");
+    $("sheetPick").classList.toggle("hidden", v.kind === "Movie");
+    $("episodeBox").classList.add("hidden");
+    $("sheet").classList.remove("hidden");
+    $("sheet").scrollTop = 0;
+    history.pushState({ sheet: true }, "");
+  }
+  function closeSheet() {
+    if ($("sheet").classList.contains("hidden")) return;
+    $("sheet").classList.add("hidden");
+    if (history.state && history.state.sheet) history.back();
+  }
+  $("sheetBack").addEventListener("click", closeSheet);
+  window.addEventListener("popstate", () => $("sheet").classList.add("hidden"));
+
+  $("sheetPlay").addEventListener("click", () => { buzz(); startNetflix({ show: current.title, play: true }); });
+
+  $("sheetPick").addEventListener("click", async () => {
+    buzz();
+    const box = $("episodeBox");
+    box.classList.remove("hidden");
+    $("seasonChips").innerHTML = "";
+    note($("episodeList"), "Loading episodes…");
+    box.scrollIntoView({ behavior: "smooth", block: "start" });
+    const r = await call({ action: "netflix_episodes", title: current.title, year: current.year }, true);
+    const data = r.ok && json(r);
+    if (!data || !data.seasons.length) { note($("episodeList"), "No episode list found for this one. Tap Play instead."); return; }
+    const chips = $("seasonChips");
+    data.seasons.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (i === 0 ? " selected" : "");
+      b.textContent = "Season " + s.number;
+      b.addEventListener("click", () => {
+        chips.querySelectorAll("button").forEach((x) => x.classList.toggle("selected", x === b));
+        showEpisodes(s);
+      });
+      chips.append(b);
+    });
+    showEpisodes(data.seasons[0]);
   });
 
-  $("netflixOpen").addEventListener("click", () => netflixWatch("", true));
-
-  // One button per app the TV says it can open, then "All apps" (Smart Hub) for the rest.
-  function renderApps(found) {
-    if (!Array.isArray(found)) {
-      $("appsHint").textContent = "Still checking which apps this TV can open…";
-      setTimeout(applyCapabilities, 8000);
-      return;
+  function showEpisodes(season) {
+    const list = $("episodeList");
+    list.innerHTML = "";
+    for (const ep of season.episodes) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "episode";
+      const pic = document.createElement("img");
+      pic.className = "thumb"; pic.alt = ""; pic.loading = "lazy";
+      pic.onerror = () => pic.removeAttribute("src");
+      if (ep.image) pic.src = ep.image;
+      const text = document.createElement("div");
+      const t = document.createElement("div"); t.className = "t"; t.textContent = ep.number + ". " + ep.name;
+      const m = document.createElement("div"); m.className = "m";
+      m.textContent = "S" + season.number + " E" + ep.number + (ep.runtime ? " · " + ep.runtime + " min" : "");
+      const sm = document.createElement("div"); sm.className = "s"; sm.textContent = ep.summary || "";
+      text.append(t, m, sm);
+      b.append(pic, text);
+      b.addEventListener("click", () => {
+        buzz();
+        startNetflix({ show: current.title, season: season.number, episode: ep.number });
+      });
+      list.append(b);
     }
+  }
+
+  // ---- long jobs ----
+  function showBusy(text) {
+    $("busyText").textContent = text.replace(/ Leave the remote alone until it's done\.?/, "");
+    $("busy").classList.remove("hidden");
+    $("netflixOpen").disabled = true;
+  }
+  function watchJob() {
+    const poll = async () => {
+      const r = await call({ action: "job" }, true);
+      const job = json(r);
+      if (job && job.busy) { setTimeout(poll, 3000); return; }
+      $("busy").classList.add("hidden");
+      $("netflixOpen").disabled = false;
+      if (job && job.last) toast(job.last.message, !job.last.ok);
+    };
+    setTimeout(poll, 3000);
+  }
+  async function checkJob() {
+    const r = await call({ action: "job" }, true);
+    const job = json(r);
+    if (job && job.busy) { showBusy("The TV is busy with Netflix…"); watchJob(); }
+  }
+
+  // ---- what this TV supports ----
+  async function applyCapabilities() {
+    const r = await call({ action: "capabilities" }, true);
+    const caps = r.ok && json(r);
+    if (!caps) return;
+    const bad = new Set(caps.unsupported || []);
+    document.querySelectorAll("[data-keys]").forEach((b) => {
+      if (b.dataset.keys.split(",").some((k) => bad.has(k))) b.classList.add("hidden");
+    });
+    if (bad.has("KEY_POWEROFF")) document.querySelector('[data-action="off"]').classList.add("hidden");
+    renderApps(caps.found_apps);
+    const profiles = caps.netflix_profiles || [];
+    renderProfiles(profiles);
+    const known = Array.isArray(caps.found_apps);
+    $("noNetflix").classList.toggle("hidden", !known || profiles.length > 0);
+    $("netflixBody").classList.toggle("hidden", known && !profiles.length);
+  }
+  function renderApps(found) {
+    if (!Array.isArray(found)) { setTimeout(applyCapabilities, 8000); return; }
     const box = $("apps");
     box.innerHTML = "";
     for (const app of found) {
       const b = document.createElement("button");
-      b.className = "small";
-      b.dataset.app = app.id;
-      b.textContent = app.name;
+      b.className = "small"; b.dataset.app = app.id; b.textContent = app.name;
       box.append(b);
     }
     const all = document.createElement("button");
-    all.className = "small";
-    all.dataset.keys = "KEY_CONTENTS";
-    all.textContent = "All apps";
+    all.className = "small"; all.dataset.keys = "KEY_CONTENTS"; all.textContent = "All apps (Smart Hub)";
     box.append(all);
-    $("appsHint").textContent = "Other apps: tap All apps and pick with the arrows.";
+    $("appsHint").textContent = "Other apps: open All apps and pick with the arrows on the Remote tab.";
   }
 
-  if (pin) {
-    $("lock").classList.add("hidden");
+  function start() {
     applyCapabilities();
     refresh();
-  } else {
-    lock();
+    checkJob();
   }
+  showTab(store.get("tab"));
+  if (pin) { $("lock").classList.add("hidden"); start(); } else { lock(); }
   setInterval(() => { if (!document.hidden && pin) refresh(); }, 30000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && pin) refresh(); });
 })();

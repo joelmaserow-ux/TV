@@ -70,10 +70,10 @@ class RemoteApp:
 
     def handle(self, body: dict) -> str:
         action = body.get("action")
-        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find"):
+        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes"):
             raise TVError(f"Busy: {self.job}. Wait for it to finish.")
         # These don't press keys, so they never wait behind a long job holding the lock.
-        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find"):
+        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find", "netflix_episodes"):
             return self._handle(body)
         with self.lock:
             return self._handle(body)
@@ -107,7 +107,11 @@ class RemoteApp:
                     what += f" S{season or 1} E{episode or 1}"
                 return self.start_job(
                     netflix.watch, str(body["profile"]), str(body.get("show", "")), season, episode,
+                    bool(body.get("play")),
                     label="Opening Netflix" + (f" for {what}" if what else ""))
+            case "netflix_episodes":
+                from .episodes import seasons
+                return json.dumps(seasons(str(body.get("title", ""))[:100], body.get("year") or None))
             case "netflix_find":
                 from .netflix_search import search as find
                 return json.dumps(find(str(body.get("query", ""))[:100]))

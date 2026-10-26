@@ -263,8 +263,13 @@ def open_episode(tv, season: int, episode: int) -> str:
     return f"Playing season {season}, episode {episode}."
 
 
-def watch(tv, profile: str, title: str = "", season: int | None = None, episode: int | None = None) -> str:
-    """Open Netflix as `profile`; if given, find `title`, and play `season`/`episode` of it."""
+def watch(tv, profile: str, title: str = "", season: int | None = None, episode: int | None = None,
+          play: bool = False) -> str:
+    """Open Netflix as `profile`; if given, find `title`.
+
+    Then either play `season`/`episode` of it, or with `play` press OK on its page, which is
+    Netflix's Continue Watching / Start Watching button. Otherwise it stops on the page.
+    """
     wants_episode = season is not None or episode is not None
     if wants_episode:
         if not title.strip():
@@ -278,7 +283,11 @@ def watch(tv, profile: str, title: str = "", season: int | None = None, episode:
     data = load(tv.s.host)
     time.sleep(float(data["home_wait"]))
     found = search(tv, title)
-    if not wants_episode:
-        return f"{opened} {found}"
-    time.sleep(float(data["title_wait"]))
-    return f"{opened} {found} {open_episode(tv, season, episode)}"
+    if wants_episode:
+        time.sleep(float(data["title_wait"]))
+        return f"{opened} {found} {open_episode(tv, season, episode)}"
+    if play:
+        time.sleep(float(data["title_wait"]))
+        tv.press(["KEY_ENTER"])
+        return f"{opened} {found} Pressed Play (Continue / Start Watching)."
+    return f"{opened} {found}"

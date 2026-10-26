@@ -100,16 +100,29 @@ async def open_app(app: str, params: str = "") -> str:
 
 @mcp.tool()
 async def open_netflix(profile: str, show: str = "", season: int | None = None,
-                       episode: int | None = None) -> str:
+                       episode: int | None = None, play: bool = True) -> str:
     """Open Netflix as a profile (Jad, Bianca, Lee, Ben or Joel, unless reconfigured).
 
-    With `show`, it then searches Netflix for it and opens the first result; with `season`
-    and/or `episode` (1-based) it then plays that episode. This drives the TV's on-screen
-    keyboard and takes 1-2 minutes; don't send other keys meanwhile.
+    With `show`, it then searches Netflix for it and opens it: with `season` and/or `episode`
+    (1-based) it plays that episode, otherwise with `play` it presses Continue/Start Watching
+    (play=False stops on the show's page). This drives the TV's on-screen keyboard and takes
+    1-2 minutes; don't send other keys meanwhile.
     """
     from . import netflix
 
-    return await run(netflix.watch, tv(), profile, show, season, episode)
+    return await run(netflix.watch, tv(), profile, show, season, episode, play)
+
+
+@mcp.tool()
+async def list_episodes(show: str) -> str:
+    """List a series' seasons and episode titles (from TVmaze), to pick one for open_netflix."""
+    from .episodes import seasons
+
+    data = await run(seasons, show)
+    return "\n".join(
+        f"Season {s['number']}: " + "; ".join(f"E{e['number']} {e['name']}" for e in s["episodes"])
+        for s in data["seasons"]
+    ) or "No episodes found."
 
 
 @mcp.tool()

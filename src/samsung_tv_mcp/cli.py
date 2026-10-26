@@ -31,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     nf.add_argument("profile")
     nf.add_argument("--wait", type=float, help="seconds Netflix needs to load before Exit (remembered)")
     nf.add_argument("--show", default="", help="search for this show/movie and open it")
+    nf.add_argument("--play", action="store_true", help="with --show: press Continue/Start Watching")
     nf.add_argument("--season", type=int, help="with --show: play this season...")
     nf.add_argument("--episode", type=int, help="...and this episode")
     nf.add_argument("--home-wait", type=float,
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     ep = sub.add_parser("netflix-episode", help="with a show's page open, play a season/episode")
     ep.add_argument("season", type=int)
     ep.add_argument("episode", type=int)
+    sub.add_parser("episodes", help="list a series' seasons and episodes (TVmaze)").add_argument("show")
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
@@ -103,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
                     if args.home_wait:
                         data["home_wait"] = args.home_wait
                     netflix.save(tv.s.host, data)
-                out = netflix.watch(tv, args.profile, args.show, args.season, args.episode)
+                out = netflix.watch(tv, args.profile, args.show, args.season, args.episode, args.play)
             case "netflix-search":
                 from . import netflix
                 out = netflix.search(tv, args.show)
@@ -114,6 +116,10 @@ def main(argv: list[str] | None = None) -> int:
             case "netflix-episode":
                 from . import netflix
                 out = netflix.open_episode(tv, args.season, args.episode)
+            case "episodes":
+                from .episodes import seasons
+                data = seasons(args.show)
+                out = "\n".join(f"Season {s['number']}: {len(s['episodes'])} episodes" for s in data["seasons"])
             case "netflix-profiles":
                 from . import netflix
                 out = "Profiles, top to bottom: " + ", ".join(netflix.set_profiles(tv.s.host, args.names))

@@ -124,3 +124,21 @@ def test_tv_uses_lounge_when_linked(fake_api, monkeypatch):
     monkeypatch.setattr(tv.dial, "ready", lambda: True)
     assert tv.play_youtube("https://youtu.be/jNQXAC9IVRw") == "Playing https://youtu.be/jNQXAC9IVRw on the TV."
     assert ("play", "jNQXAC9IVRw") in fake_api.calls
+
+
+def test_fresh_youtube_presses_ok_on_account_picker(fake_api, monkeypatch):
+    import samsung_tv_mcp.tv as tvmod
+    tv = TV(Settings(host="1.2.3.4", port=1, mac=None, client_name="t", client_id="t", use_cec=False,
+                     timeout=1, rendering_control_url=None, dial_url="http://127.0.0.1:1/ws/app/"))
+    clock = [0.0]
+    monkeypatch.setattr(tvmod.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tvmod.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    monkeypatch.setattr(tv, "wait_for_apps", lambda: None)
+    monkeypatch.setattr(tv.dial, "status", lambda name: "stopped")
+    monkeypatch.setattr(tv, "_launch", lambda name, params="": None)
+    pressed = []
+    monkeypatch.setattr(tv, "press", lambda keys, delay=0.4: pressed.extend(keys) or keys)
+    # Comes online only after someone picks an account.
+    monkeypatch.setattr(youtube, "is_online", lambda host: "KEY_ENTER" in pressed)
+    tv._ensure_youtube_open()
+    assert pressed == ["KEY_ENTER"]

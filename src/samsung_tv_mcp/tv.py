@@ -264,15 +264,30 @@ class TV:
             self.wait_for_apps()
             self.dial.launch(name, params)
 
-    def _ensure_youtube_open(self, wait: float = 25.0) -> None:
+    # A freshly opened YouTube app stops on "Who's watching?" and won't take casts until an
+    # account is picked; the signed-in account is highlighted, so OK picks it.
+    PICK_ACCOUNT_AFTER = 12.0
+
+    def _ensure_youtube_open(self, wait: float = 45.0) -> None:
         self.wait_for_apps()
         just_opened = self.dial.status("YouTube") != "running"
         if just_opened:
             self._launch("YouTube")
-        deadline = time.monotonic() + wait
+        start = time.monotonic()
+        picked = False
         while not youtube.is_online(self.s.host):
-            if time.monotonic() > deadline:
-                raise TVError("The TV's YouTube app opened but never came online for casting.")
+            waited = time.monotonic() - start
+            if waited > wait:
+                raise TVError(
+                    "The TV's YouTube app opened but never became ready for videos. If it's showing "
+                    "an account picker or a sign-in screen, choose an account with the remote and try again."
+                )
+            if just_opened and not picked and waited >= self.PICK_ACCOUNT_AFTER:
+                picked = True
+                try:
+                    self.press(["KEY_ENTER"])
+                except TVError:
+                    pass
             time.sleep(2)
         if just_opened:
             # "Online" comes long before the app can take a video: anything sent while it is

@@ -8,6 +8,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings
+from .encrypted import EncryptedPairing, EncryptedRemote, credentials_path
 from .legacy import LegacyRemote, TVError
 from .power import cec_power_on, send_wol
 from .upnp import DIAL_ST, RENDERING_CONTROL, Dial, RenderingControl, ssdp_search
@@ -75,11 +76,33 @@ def _parse_seconds(value: str) -> int | None:
 class TV:
     def __init__(self, settings: Settings):
         self.s = settings
-        self.remote = LegacyRemote(
+        self.legacy = LegacyRemote(
             settings.host, settings.client_id, settings.client_name, settings.port, settings.timeout
         )
+        self.encrypted = EncryptedRemote(settings.host, timeout=settings.timeout)
         self.rendering = RenderingControl(settings.host, settings.rendering_control_url, settings.timeout)
         self.dial = Dial(settings.host, settings.dial_url, settings.timeout)
+
+    @property
+    def remote(self) -> LegacyRemote | EncryptedRemote:
+        """The remote-key protocol this TV speaks."""
+        if self.s.method == "legacy":
+            return self.legacy
+        if self.s.method == "encrypted" or self.encrypted.is_paired():
+            return self.encrypted
+        if not self.legacy.is_reachable(timeout=1.5) and self.encrypted.is_reachable(timeout=1.5):
+            return self.encrypted
+        return self.legacy
+
+    def pair_start(self) -> str:
+        if not _port_open(self.s.host, 8080):
+            raise TVError("The TV's pairing service (port 8080) isn't answering. Make sure the TV is on.")
+        EncryptedPairing(self.s.host).start()
+        return "A 4-digit PIN should now be on the TV screen. Call pair_finish with it."
+
+    def pair_finish(self, pin: str) -> str:
+        path = EncryptedPairing(self.s.host).finish(pin)
+        return f"Paired. Credentials saved to {path}; you won't need to pair again."
 
     # --- power -------------------------------------------------------------
 
@@ -206,18 +229,25 @@ class TV:
         for st, label in [(RENDERING_CONTROL, "UPnP volume control"), (DIAL_ST, "DIAL app launching")]:
             hits = ssdp_search(st, self.s.host, timeout=2.5)
             lines.append(f"  {label}: {'found at ' + hits[0].get('location', '?') if hits else 'not found'}")
-        if _port_open(self.s.host, 55):
-            try:
-                self.remote.send_key("KEY_INFO")
-                lines.append("  remote pairing: OK (sent KEY_INFO; you should see the info banner)")
-            except TVError as exc:
-                lines.append(f"  remote pairing: {exc}")
-        elif _port_open(self.s.host, 8000) or _port_open(self.s.host, 8080):
+        encrypted_ports = _port_open(self.s.host, 8000) or _port_open(self.s.host, 8080)
+        if _port_open(self.s.host, 55) and self.s.method != "encrypted" and not self.encrypted.is_paired():
+            lines.append(self._test_remote("legacy"))
+        elif self.encrypted.is_paired():
+            lines.append(self._test_remote(f"encrypted, credentials in {credentials_path(self.s.host)}"))
+        elif encrypted_ports:
             lines.append(
-                "  Port 55 is closed but 8000/8080 are open: this firmware uses Samsung's encrypted "
-                "pairing, which this server does not support. See README > Troubleshooting."
+                "  This TV uses Samsung's encrypted PIN pairing. Pair once with:  samsung-tv pair\n"
+                "  (or ask Claude to pair with the TV). Volume and YouTube work without pairing."
             )
         return "\n".join(lines)
+
+
+    def _test_remote(self, label: str) -> str:
+        try:
+            self.remote.send_key("KEY_INFO")
+            return f"  remote ({label}): OK, sent KEY_INFO; you should see the info banner on the TV"
+        except TVError as exc:
+            return f"  remote ({label}): {exc}"
 
 
 def _port_open(host: str, port: int) -> bool:

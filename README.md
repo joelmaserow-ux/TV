@@ -1,7 +1,7 @@
 # Samsung TV MCP server
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude control a **Samsung UA55H6300**
-(2014 H-series, Orsay OS) Smart TV at `10.0.1.13` over your home network.
+(2014 H-series, Orsay OS) Smart TV at `192.168.1.106` over your home network.
 
 | You ask Claude to… | Tool | How it works | Works on the UA55H6300? |
 |---|---|---|---|
@@ -33,8 +33,8 @@ Raspberry Pi. Claude Desktop or Claude Code runs on that computer and starts thi
 ### Step 1: Prepare the TV
 
 1. Turn the TV on with its remote.
-2. Give the TV a fixed address so `10.0.1.13` keeps working. In your router's admin page, find
-   "DHCP reservation" (or "static lease") and reserve `10.0.1.13` for the TV.
+2. Give the TV a fixed address so `192.168.1.106` keeps working. In your router's admin page, find
+   "DHCP reservation" (or "static lease") and reserve `192.168.1.106` for the TV.
    You can see the TV's current address under **Menu → Network → Network Status**.
 3. Allow phones/computers to control it: **Menu → Network → AllShare Settings** (on some
    firmwares **Multimedia Device Settings**). Make sure it is **On** and nothing is set to "Deny".
@@ -85,19 +85,31 @@ With the TV on, run:
 .venv/bin/samsung-tv diagnose        # Windows: .venv\Scripts\samsung-tv diagnose
 ```
 
-**Look at the TV.** The first time, it shows a prompt asking whether to allow "Claude TV Remote".
-Choose **Allow** with the TV remote within 30 seconds. The TV remembers this, so you only do it once.
+How you pair depends on the TV's firmware, and `diagnose` tells you which one you have:
+
+- **Port 55 open (older firmware):** the TV shows a prompt asking whether to allow
+  "Claude TV Remote". Choose **Allow** with the TV remote within 30 seconds.
+- **Port 55 closed, 8000/8080 open (newer firmware, encrypted pairing):** run
+
+  ```bash
+  .venv/bin/samsung-tv pair
+  ```
+
+  A 4-digit PIN appears on the TV. Type it into the terminal and press Enter. The credentials are
+  saved in a `.samsung-tv-mcp` folder in your home folder.
+
+Either way you only pair once.
 
 A good result looks like this:
 
 ```
-TV host: 10.0.1.13
+TV host: 192.168.1.106
   port 55    open    legacy remote (needed for keys/power off)
   port 7676  open    UPnP / AllShare
   ...
-  UPnP volume control: found at http://10.0.1.13:7676/...
-  DIAL app launching: found at http://10.0.1.13:7676/...
-  remote pairing: OK (sent KEY_INFO; you should see the info banner)
+  UPnP volume control: found at http://192.168.1.106:7676/...
+  DIAL app launching: found at http://192.168.1.106:7676/...
+  remote (...): OK, sent KEY_INFO; you should see the info banner on the TV
 ```
 
 Now try a few commands:
@@ -137,7 +149,7 @@ from Step 6:
     "samsung-tv": {
       "command": "/Users/you/samsung-tv-mcp/.venv/bin/samsung-tv-mcp",
       "env": {
-        "SAMSUNG_TV_HOST": "10.0.1.13"
+        "SAMSUNG_TV_HOST": "192.168.1.106"
       }
     }
   }
@@ -153,7 +165,7 @@ the chat box.
 ### Step 7b: …or add it to Claude Code
 
 ```bash
-claude mcp add samsung-tv -e SAMSUNG_TV_HOST=10.0.1.13 -- /full/path/to/.venv/bin/samsung-tv-mcp
+claude mcp add samsung-tv -e SAMSUNG_TV_HOST=192.168.1.106 -- /full/path/to/.venv/bin/samsung-tv-mcp
 ```
 
 Then run `/mcp` inside Claude Code to check that `samsung-tv` is connected.
@@ -179,8 +191,10 @@ Set these in the `env` block of the MCP config (or export them before running `s
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `SAMSUNG_TV_HOST` | `10.0.1.13` | TV IP address |
-| `SAMSUNG_TV_PORT` | `55` | Remote-control port |
+| `SAMSUNG_TV_HOST` | `192.168.1.106` | TV IP address |
+| `SAMSUNG_TV_PORT` | `55` | Remote-control port (older firmware) |
+| `SAMSUNG_TV_METHOD` | `auto` | `legacy` (port 55), `encrypted` (PIN pairing) or `auto` |
+| `SAMSUNG_TV_CONFIG_DIR` | `~/.samsung-tv-mcp` | Where PIN-pairing credentials are saved |
 | `SAMSUNG_TV_CLIENT_NAME` | `Claude TV Remote` | Name shown in the TV's Allow/Deny prompt |
 | `SAMSUNG_TV_CLIENT_ID` | derived from this computer's MAC | Identity the TV remembers after "Allow" |
 | `SAMSUNG_TV_USE_CEC` | `0` | `1` lets `power_on` use `cec-client` (HDMI-CEC) |
@@ -202,9 +216,9 @@ Set these in the `env` block of the MCP config (or export them before running `s
   different network (e.g. a guest Wi-Fi). Check **Menu → Network → Network Status** on the TV.
 - **No Allow prompt / "denied"**: go to **Menu → Network → AllShare Settings** (or
   *Multimedia Device Settings*), find "Claude TV Remote", and set it to **Allow**.
-- **`diagnose` says port 55 is closed but 8000/8080 are open**: a few late H/J firmwares replaced
-  the port-55 protocol with Samsung's encrypted PIN pairing, which this server does not implement.
-  Volume (UPnP) and YouTube (DIAL) may still work; keys and power off won't.
+- **`diagnose` says port 55 is closed but 8000/8080 are open**: your firmware uses encrypted PIN
+  pairing. Run `samsung-tv pair` (Step 5). If the PIN is rejected or it times out, run it again
+  for a fresh PIN. To re-pair from scratch, delete the `.samsung-tv-mcp` folder in your home folder.
 - **Volume control not found**: AllShare/DLNA is off. Turn it on (Step 1.3). `change_volume` and
   `mute` still work through remote keys.
 - **YouTube opens but the video doesn't play / YouTube won't open**: YouTube has been dropping old
@@ -221,5 +235,6 @@ Set these in the `env` block of the MCP config (or export them before running `s
 ```
 
 The tests run against fake TV endpoints (no real TV needed). The protocols are in
-`src/samsung_tv_mcp/`: `legacy.py` (port-55 remote), `upnp.py` (SSDP, UPnP volume, DIAL),
+`src/samsung_tv_mcp/`: `legacy.py` (port-55 remote), `encrypted.py` (PIN pairing, via the
+`samsungtvws` library), `upnp.py` (SSDP, UPnP volume, DIAL),
 `power.py` (WoL/CEC), `tv.py` (the operations), `server.py` (MCP tools), `cli.py` (`samsung-tv`).

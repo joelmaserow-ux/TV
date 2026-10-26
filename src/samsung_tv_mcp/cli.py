@@ -13,9 +13,10 @@ from .tv import TV
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="samsung-tv", description="Control a Samsung H-series TV.")
-    p.add_argument("--host", help="TV IP address (default: $SAMSUNG_TV_HOST or 10.0.1.13)")
+    p.add_argument("--host", help="TV IP address (default: $SAMSUNG_TV_HOST or 192.168.1.106)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("diagnose", help="probe the TV and test pairing")
+    sub.add_parser("pair", help="PIN-pair with TVs that use encrypted firmware")
     sub.add_parser("status")
     sub.add_parser("off")
     sub.add_parser("on")
@@ -36,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         match args.cmd:
             case "diagnose":
+                out = tv.diagnose()
+            case "pair":
+                print(tv.pair_start())
+                print(tv.pair_finish(input("PIN shown on the TV: ")))
                 out = tv.diagnose()
             case "status":
                 out = tv.status()

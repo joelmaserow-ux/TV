@@ -30,11 +30,13 @@ class Settings:
     timeout: float
     rendering_control_url: str | None
     dial_url: str | None
+    # "auto", "legacy" (port 55) or "encrypted" (PIN pairing, ports 8000/8080)
+    method: str = "auto"
 
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
-            host=os.environ.get("SAMSUNG_TV_HOST", "10.0.1.13"),
+            host=os.environ.get("SAMSUNG_TV_HOST", "192.168.1.106"),
             port=int(os.environ.get("SAMSUNG_TV_PORT", "55")),
             mac=os.environ.get("SAMSUNG_TV_MAC") or None,
             client_name=os.environ.get("SAMSUNG_TV_CLIENT_NAME", "Claude TV Remote"),
@@ -43,4 +45,5 @@ class Settings:
             timeout=float(os.environ.get("SAMSUNG_TV_TIMEOUT", "5")),
             rendering_control_url=os.environ.get("SAMSUNG_TV_RENDERING_CONTROL_URL") or None,
             dial_url=os.environ.get("SAMSUNG_TV_DIAL_URL") or None,
+            method=os.environ.get("SAMSUNG_TV_METHOD", "auto").strip().lower(),
         )

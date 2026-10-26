@@ -75,13 +75,13 @@ samsungotn.net           # firmware updates (this model no longer gets new firmw
 ```
 
 **Best practice:** before blocking, let the TV run for a day with Pi-hole/AdGuard watching it.
-Then filter the query log by the TV's IP (`10.0.1.13`) to see exactly which domains *your*
+Then filter the query log by the TV's IP (`192.168.1.106`) to see exactly which domains *your*
 firmware contacts. Block the advertising/analytics ones, check YouTube still works, and repeat.
 
 ## 4. Take the TV offline (maximum privacy)
 
 If you watch through a streaming stick, game console or set-top box anyway, the TV's own apps
-are pure liability. In your router, block **internet** access for `10.0.1.13` (many routers call
+are pure liability. In your router, block **internet** access for `192.168.1.106` (many routers call
 this "Parental controls", "Access control" or "Block device", and some let you block internet
 while keeping the local network).
 

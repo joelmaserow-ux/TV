@@ -20,7 +20,9 @@ Controls a Samsung UA55H6300 (2014 H-series, Orsay OS) Smart TV on the local net
 - To play a YouTube video you need its URL or id; find it first, then call play_youtube.
 - Deep links into a specific show only work for YouTube. For other apps, open_app and then
   navigate with send_keys (KEY_UP/DOWN/LEFT/RIGHT, KEY_ENTER, KEY_RETURN).
-- The first command ever sent shows an Allow/Deny prompt on the TV; ask the user to press Allow.
+- Pairing: older firmwares show an Allow/Deny prompt on the first command; ask the user to press
+  Allow. Newer firmwares need PIN pairing once: call pair_start, ask the user for the 4-digit PIN
+  shown on the TV, then call pair_finish with it.
 """
 
 mcp = MCPServer("samsung-tv", instructions=INSTRUCTIONS)
@@ -130,6 +132,18 @@ async def send_keys(keys: list[str], delay_seconds: float = 0.4) -> str:
 async def list_keys() -> str:
     """List common remote-control key names for send_keys."""
     return "\n".join(f"{k}: {v}" for k, v in COMMON_KEYS.items())
+
+
+@mcp.tool()
+async def pair_start() -> str:
+    """Begin PIN pairing (needed once on TVs with encrypted firmware). Shows a 4-digit PIN on the TV."""
+    return await run(tv().pair_start)
+
+
+@mcp.tool()
+async def pair_finish(pin: str) -> str:
+    """Finish PIN pairing with the 4-digit PIN the user reads off the TV screen."""
+    return await run(tv().pair_finish, pin)
 
 
 @mcp.tool()

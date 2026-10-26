@@ -179,12 +179,20 @@ class Dial:
             "TV is on, or set SAMSUNG_TV_DIAL_URL."
         )
 
-    def _app(self, name: str) -> str:
-        return self._base().rstrip("/") + "/" + name
+    # Launching can block until the app has loaded, which takes a while on these TVs.
+    LAUNCH_TIMEOUT = 25.0
 
-    def status(self, name: str) -> str:
-        """'running', 'stopped', 'hidden', or 'not available'."""
-        code, _, text = _http(self._app(name), timeout=self.timeout)
+    def _bases(self) -> list[str]:
+        base = self._base().rstrip("/") + "/"
+        # Some firmwares advertise .../ws/app/ while the apps live under .../ws/apps/.
+        alt = base.replace("/ws/app/", "/ws/apps/") if base.endswith("/ws/app/") else None
+        return [base] + ([alt] if alt else [])
+
+    def _app(self, name: str, base: str | None = None) -> str:
+        return (base or self._bases()[0]) + name
+
+    def _status_at(self, url: str) -> str:
+        code, _, text = _http(url, timeout=self.timeout)
         if code != 200:
             return "not available"
         try:
@@ -195,16 +203,56 @@ class Dial:
             pass
         return "unknown"
 
-    def launch(self, name: str, params: str = "") -> int:
-        code, _, text = _http(
-            self._app(name), "POST", params.encode("utf-8"),
-            {"Content-Type": "text/plain; charset=utf-8"}, self.timeout,
-        )
-        if code == 404:
-            raise TVError(f"The TV does not offer '{name}' over DIAL (it may not be installed).")
-        if code not in (200, 201):
-            raise TVError(f"Launching '{name}' failed with HTTP {code}: {text[:200]}")
-        return code
+    def status(self, name: str) -> str:
+        """'running', 'stopped', 'hidden', or 'not available'."""
+        state = "not available"
+        for base in self._bases():
+            try:
+                state = self._status_at(self._app(name, base))
+            except TVError:
+                continue
+            if state != "not available":
+                return state
+        return state
+
+    def probe(self, name: str) -> list[str]:
+        """One line per candidate URL, for diagnostics."""
+        lines = []
+        for base in self._bases():
+            url = self._app(name, base)
+            try:
+                lines.append(f"{url} -> {self._status_at(url)}")
+            except TVError as exc:
+                lines.append(f"{url} -> error: {exc}")
+        return lines
+
+    def launch(self, name: str, params: str = "") -> str:
+        """Start an app; returns the URL that worked."""
+        errors = []
+        for base in self._bases():
+            url = self._app(name, base)
+            try:
+                code, _, text = _http(
+                    url, "POST", params.encode("utf-8"),
+                    {"Content-Type": "text/plain; charset=utf-8"}, max(self.timeout, self.LAUNCH_TIMEOUT),
+                )
+            except TVError as exc:
+                # A launch that never answers may still have worked.
+                try:
+                    if self._status_at(url) == "running":
+                        return url
+                except TVError:
+                    pass
+                errors.append(str(exc))
+                continue
+            if code in (200, 201):
+                return url
+            errors.append(f"HTTP {code} from {url}: {text[:200]}" if code != 404 else f"{url} not found")
+        raise TVError(f"Couldn't launch '{name}': " + "; ".join(errors))
 
     def stop(self, name: str) -> None:
-        _http(self._app(name) + "/run", "DELETE", timeout=self.timeout)
+        for base in self._bases():
+            try:
+                _http(self._app(name, base) + "/run", "DELETE", timeout=self.timeout)
+            except TVError:
+                pass

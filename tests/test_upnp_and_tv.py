@@ -122,3 +122,57 @@ def test_dial_status_and_missing_app(http_tv):
 def test_power_on_without_options_explains():
     tv = _tv("http://127.0.0.1:1")
     assert "network off in standby" in tv.power_on()
+
+
+class SamsungDialHttp(BaseHTTPRequestHandler):
+    """Advertised base is /ws/app/, but apps answer under /ws/apps/; Slow hangs then runs."""
+
+    launched = []
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if self.path == "/ws/apps/YouTube":
+            SamsungDialHttp.launched.append(self.path)
+            self.send_response(201)
+            self.end_headers()
+        elif self.path == "/ws/app/Slow":
+            import time
+            SamsungDialHttp.launched.append(self.path)
+            time.sleep(2)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_GET(self):
+        if self.path == "/ws/app/Slow" and SamsungDialHttp.launched:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"<service><state>running</state></service>")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+
+@pytest.fixture
+def samsung_dial():
+    from http.server import ThreadingHTTPServer
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SamsungDialHttp)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    SamsungDialHttp.launched = []
+    yield f"http://127.0.0.1:{server.server_port}/ws/app/"
+    server.shutdown()
+
+
+def test_dial_falls_back_to_ws_apps(samsung_dial):
+    dial = Dial("127.0.0.1", samsung_dial)
+    assert dial.launch("YouTube", "v=dQw4w9WgXcQ").endswith("/ws/apps/YouTube")
+    assert len(dial.probe("YouTube")) == 2
+
+
+def test_dial_launch_timeout_but_running(samsung_dial, monkeypatch):
+    dial = Dial("127.0.0.1", samsung_dial, timeout=0.5)
+    monkeypatch.setattr(Dial, "LAUNCH_TIMEOUT", 0.5)
+    assert dial.launch("Slow").endswith("/ws/app/Slow")

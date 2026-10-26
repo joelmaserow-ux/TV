@@ -229,6 +229,11 @@ class TV:
         for st, label in [(RENDERING_CONTROL, "UPnP volume control"), (DIAL_ST, "DIAL app launching")]:
             hits = ssdp_search(st, self.s.host, timeout=2.5)
             lines.append(f"  {label}: {'found at ' + hits[0].get('location', '?') if hits else 'not found'}")
+        try:
+            for app in ("YouTube", "Netflix"):
+                lines += [f"  app {line}" for line in self.dial.probe(app)]
+        except TVError as exc:
+            lines.append(f"  apps: {exc}")
         encrypted_ports = _port_open(self.s.host, 8000) or _port_open(self.s.host, 8080)
         if _port_open(self.s.host, 55) and self.s.method != "encrypted" and not self.encrypted.is_paired():
             lines.append(self._test_remote("legacy"))

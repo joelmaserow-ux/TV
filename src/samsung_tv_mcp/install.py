@@ -14,9 +14,10 @@ PACKAGE_SPEC = "git+https://github.com/joelmaserow-ux/TV@ccr-5fac4f84-5wt34a"
 def config_candidates() -> list[Path]:
     home = Path.home()
     if sys.platform == "win32":
-        paths = [Path(os.environ.get("APPDATA", home / "AppData/Roaming")) / "Claude"]
-        # Microsoft Store installs keep it in a per-package folder.
-        packages = Path(os.environ.get("LOCALAPPDATA", home / "AppData/Local")) / "Packages"
+        local = Path(os.environ.get("LOCALAPPDATA", home / "AppData/Local"))
+        paths = [Path(os.environ.get("APPDATA", home / "AppData/Roaming")) / "Claude", local / "Claude"]
+        # Older Microsoft Store installs keep it in a per-package folder.
+        packages = local / "Packages"
         paths += sorted(packages.glob("Claude_*/LocalCache/Roaming/Claude")) if packages.exists() else []
     elif sys.platform == "darwin":
         paths = [home / "Library/Application Support/Claude"]
@@ -27,10 +28,14 @@ def config_candidates() -> list[Path]:
 
 def find_config() -> Path:
     candidates = config_candidates()
+    # The folder Claude Desktop actually runs from has its logs in it. Store installs can
+    # leave a stale package folder behind (marked ".user-data-left..."), so check this first.
+    for path in candidates:
+        if (path.parent / "logs").is_dir():
+            return path
     for path in candidates:
         if path.exists():
             return path
-    # Prefer a folder Claude Desktop already created.
     for path in candidates:
         if path.parent.exists():
             return path

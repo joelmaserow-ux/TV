@@ -37,3 +37,13 @@ def test_refuses_broken_json(cfg):
     with pytest.raises(ValueError, match="isn't valid JSON"):
         install.install("192.168.1.106")
     assert cfg.read_text() == "{ not json"
+
+
+def test_prefers_folder_with_logs(tmp_path, monkeypatch):
+    stale = tmp_path / "Packages" / "Claude_x" / "claude_desktop_config.json"
+    live = tmp_path / "Local" / "Claude" / "claude_desktop_config.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{}")
+    (live.parent / "logs").mkdir(parents=True)
+    monkeypatch.setattr(install, "config_candidates", lambda: [stale, live])
+    assert install.find_config() == live

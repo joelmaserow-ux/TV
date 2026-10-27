@@ -93,6 +93,28 @@ browser menu) so it opens like an app. Keep the window running; the computer mus
 
 ---
 
+## Run the remote on an Android phone (no laptop)
+
+Any Android phone that **stays at home on the TV's Wi-Fi** can run the family remote instead of a
+computer. (iPhones can't.) If it's a phone you carry around, the remote only works while it's home.
+
+1. Install **Termux** from F-Droid (https://f-droid.org/packages/com.termux/) — the Play Store
+   build is older. Optionally also install **Termux:Boot** from F-Droid and open it once, so the
+   remote starts by itself when the phone restarts.
+2. Open Termux and run:
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/joelmaserow-ux/TV/ccr-5fac4f84-5wt34a/scripts/termux-setup.sh | bash
+   ```
+3. Pair with the TV and link YouTube again from the phone (`samsung-tv pair`, then
+   `samsung-tv youtube-link <code>`), then start it with `tv-remote`.
+4. In Android settings, set Termux's battery use to **Unrestricted** (Apps → Termux → Battery)
+   and keep the phone on its charger, so Android doesn't stop the remote in the background.
+
+Other phones open the address `tv-remote` prints; on the host phone itself use
+`http://localhost:8765`. Claude's MCP server isn't installed on the phone; keep using the PC for Claude.
+
+---
+
 ## Step-by-step installation (manual)
 
 You need a computer that **stays on the same home network as the TV**: a Mac, a Windows PC, or a

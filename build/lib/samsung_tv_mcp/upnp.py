@@ -1,0 +1,289 @@
+"""SSDP discovery, UPnP RenderingControl (absolute volume / mute) and DIAL (app launch)."""
+
+from __future__ import annotations
+
+import socket
+import time
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+from urllib.parse import urljoin, urlparse
+from xml.sax.saxutils import escape
+
+from .legacy import TVError
+
+SSDP_ADDR = ("239.255.255.250", 1900)
+RENDERING_CONTROL = "urn:schemas-upnp-org:service:RenderingControl:1"
+DIAL_ST = "urn:dial-multiscreen-org:service:dial:1"
+
+
+def ssdp_search(st: str, host: str, timeout: float = 3.0) -> list[dict[str, str]]:
+    """M-SEARCH for `st` and return the response headers sent by `host`."""
+    msg = (
+        "M-SEARCH * HTTP/1.1\r\n"
+        f"HOST: {SSDP_ADDR[0]}:{SSDP_ADDR[1]}\r\n"
+        'MAN: "ssdp:discover"\r\n'
+        "MX: 2\r\n"
+        f"ST: {st}\r\n\r\n"
+    ).encode()
+    results: list[dict[str, str]] = []
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        sock.settimeout(0.5)
+        for target in (SSDP_ADDR, (host, 1900)):
+            try:
+                sock.sendto(msg, target)
+            except OSError:
+                pass
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, addr = sock.recvfrom(65507)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            if addr[0] != host:
+                continue
+            headers = parse_http_headers(data.decode("utf-8", "replace"))
+            if headers.get("st", "").lower() == st.lower() and headers not in results:
+                results.append(headers)
+    return results
+
+
+def _port_open(host: str, port: int, timeout: float = 2.0) -> bool:
+    try:
+        with socket.create_connection((host, port), min(timeout, 2.0)):
+            return True
+    except OSError:
+        return False
+
+
+def parse_http_headers(text: str) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for line in text.split("\r\n")[1:]:
+        if ":" in line:
+            name, value = line.split(":", 1)
+            headers[name.strip().lower()] = value.strip()
+    return headers
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def find_control_url(description_xml: str, location: str, service_type: str) -> str | None:
+    """Find a service's absolute controlURL in a UPnP device description."""
+    root = ET.fromstring(description_xml)
+    base = location
+    for el in root.iter():
+        if _local(el.tag) == "URLBase" and el.text:
+            base = el.text.strip()
+    for service in root.iter():
+        if _local(service.tag) != "service":
+            continue
+        fields = {_local(c.tag): (c.text or "").strip() for c in service}
+        if fields.get("serviceType", "").lower() == service_type.lower() and fields.get("controlURL"):
+            return urljoin(base, fields["controlURL"])
+    return None
+
+
+def _http(url: str, method: str = "GET", body: bytes | None = None,
+          headers: dict[str, str] | None = None, timeout: float = 5.0) -> tuple[int, dict[str, str], str]:
+    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, {k.lower(): v for k, v in resp.headers.items()}, resp.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        return exc.code, {k.lower(): v for k, v in exc.headers.items()}, exc.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, OSError) as exc:
+        raise TVError(f"HTTP {method} {url} failed: {exc}") from exc
+
+
+class RenderingControl:
+    def __init__(self, host: str, control_url: str | None = None, timeout: float = 5.0):
+        self.host = host
+        self.control_url = control_url
+        self.timeout = timeout
+
+    def _url(self) -> str:
+        if self.control_url:
+            return self.control_url
+        for hit in ssdp_search(RENDERING_CONTROL, self.host):
+            location = hit.get("location")
+            if not location:
+                continue
+            _, _, xml = _http(location, timeout=self.timeout)
+            url = find_control_url(xml, location, RENDERING_CONTROL)
+            if url:
+                self.control_url = url
+                return url
+        raise TVError(
+            "The TV did not answer UPnP discovery for volume control. Make sure the TV is on and "
+            "'AllShare / DLNA' is enabled, or set SAMSUNG_TV_RENDERING_CONTROL_URL."
+        )
+
+    def _call(self, action: str, args: dict[str, str | int]) -> str:
+        arg_xml = "".join(f"<{k}>{escape(str(v))}</{k}>" for k, v in args.items())
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+            's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>'
+            f'<u:{action} xmlns:u="{RENDERING_CONTROL}">{arg_xml}</u:{action}>'
+            "</s:Body></s:Envelope>"
+        ).encode()
+        status, _, text = _http(
+            self._url(), "POST", body,
+            {"Content-Type": 'text/xml; charset="utf-8"', "SOAPACTION": f'"{RENDERING_CONTROL}#{action}"'},
+            self.timeout,
+        )
+        if status != 200:
+            self.control_url = None if status == 404 else self.control_url
+            raise TVError(f"UPnP {action} failed with HTTP {status}: {text[:200]}")
+        return text
+
+    @staticmethod
+    def _extract(text: str, name: str) -> str:
+        for el in ET.fromstring(text).iter():
+            if _local(el.tag) == name:
+                return (el.text or "").strip()
+        raise TVError(f"No {name} in UPnP response")
+
+    def get_volume(self) -> int:
+        return int(self._extract(self._call("GetVolume", {"InstanceID": 0, "Channel": "Master"}), "CurrentVolume"))
+
+    def set_volume(self, level: int) -> None:
+        self._call("SetVolume", {"InstanceID": 0, "Channel": "Master", "DesiredVolume": level})
+
+    def get_mute(self) -> bool:
+        return self._extract(self._call("GetMute", {"InstanceID": 0, "Channel": "Master"}), "CurrentMute") in {"1", "true"}
+
+    def set_mute(self, mute: bool) -> None:
+        self._call("SetMute", {"InstanceID": 0, "Channel": "Master", "DesiredMute": int(mute)})
+
+
+class Dial:
+    """DIAL ("DIscovery And Launch") — what phones use to cast YouTube to the TV."""
+
+    def __init__(self, host: str, app_url: str | None = None, timeout: float = 5.0):
+        self.host = host
+        self.app_url = app_url
+        self.timeout = timeout
+
+    def _base(self) -> str:
+        if self.app_url:
+            return self.app_url
+        for hit in ssdp_search(DIAL_ST, self.host):
+            location = hit.get("location")
+            if not location:
+                continue
+            _, headers, _ = _http(location, timeout=self.timeout)
+            url = headers.get("application-url")
+            if url:
+                self.app_url = url
+                return url
+        # Discovery is flaky right after power-on; Samsung TVs of this era serve DIAL here.
+        if _port_open(self.host, 8080, self.timeout):
+            return f"http://{self.host}:8080/ws/app/"
+        raise TVError(
+            "The TV's app service isn't answering yet (it starts a little after the picture). "
+            "Make sure the TV is on, or set SAMSUNG_TV_DIAL_URL."
+        )
+
+    def ready(self) -> bool:
+        """True once the app service accepts connections."""
+        try:
+            url = urlparse(self._base())
+        except TVError:
+            return False
+        return _port_open(url.hostname or self.host, url.port or 80, self.timeout)
+
+    # Launching can block until the app has loaded, which takes a while on these TVs.
+    LAUNCH_TIMEOUT = 25.0
+
+    def _bases(self) -> list[str]:
+        base = self._base().rstrip("/") + "/"
+        # Some firmwares advertise .../ws/app/ while the apps live under .../ws/apps/.
+        alt = base.replace("/ws/app/", "/ws/apps/") if base.endswith("/ws/app/") else None
+        return [base] + ([alt] if alt else [])
+
+    def _app(self, name: str, base: str | None = None) -> str:
+        return (base or self._bases()[0]) + name
+
+    def _status_at(self, url: str) -> str:
+        code, _, text = _http(url, timeout=self.timeout)
+        if code != 200:
+            return "not available"
+        try:
+            for el in ET.fromstring(text).iter():
+                if _local(el.tag) == "state":
+                    return (el.text or "unknown").strip()
+        except ET.ParseError:
+            pass
+        return "unknown"
+
+    def status(self, name: str) -> str:
+        """'running', 'stopped', 'hidden', or 'not available'."""
+        state = "not available"
+        for base in self._bases():
+            try:
+                state = self._status_at(self._app(name, base))
+            except TVError:
+                continue
+            if state != "not available":
+                return state
+        return state
+
+    def probe(self, name: str) -> list[str]:
+        """One line per candidate URL, for diagnostics."""
+        lines = []
+        for base in self._bases():
+            url = self._app(name, base)
+            try:
+                lines.append(f"{url} -> {self._status_at(url)}")
+            except TVError as exc:
+                lines.append(f"{url} -> error: {exc}")
+        return lines
+
+    def raw(self, name: str) -> list[str]:
+        """The TV's full DIAL description of an app at each candidate URL."""
+        out = []
+        for base in self._bases():
+            url = self._app(name, base)
+            try:
+                code, _, text = _http(url, timeout=self.timeout)
+                out.append(f"{url} -> HTTP {code}\n{text.strip()}")
+            except TVError as exc:
+                out.append(f"{url} -> {exc}")
+        return out
+
+    def launch(self, name: str, params: str = "") -> str:
+        """Start an app; returns the URL that worked."""
+        errors = []
+        for base in self._bases():
+            url = self._app(name, base)
+            try:
+                code, _, text = _http(
+                    url, "POST", params.encode("utf-8"),
+                    {"Content-Type": "text/plain; charset=utf-8"}, max(self.timeout, self.LAUNCH_TIMEOUT),
+                )
+            except TVError as exc:
+                # A launch that never answers may still have worked.
+                try:
+                    if self._status_at(url) == "running":
+                        return url
+                except TVError:
+                    pass
+                errors.append(str(exc))
+                continue
+            if code in (200, 201):
+                return url
+            errors.append(f"HTTP {code} from {url}: {text[:200]}" if code != 404 else f"{url} not found")
+        raise TVError(f"Couldn't launch '{name}': " + "; ".join(errors))
+
+    def stop(self, name: str) -> None:
+        for base in self._bases():
+            try:
+                _http(self._app(name, base) + "/run", "DELETE", timeout=self.timeout)
+            except TVError:
+                pass

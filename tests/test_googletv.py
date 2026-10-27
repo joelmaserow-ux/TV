@@ -76,3 +76,18 @@ def test_unpaired_is_explained(tmp_path, monkeypatch):
     monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
     with pytest.raises(googletv.TVError, match="Not paired"):
         googletv.GoogleTV("10.0.0.6").press(["KEY_UP"])
+
+
+def test_status_waits_for_late_volume_info(gtv, monkeypatch):
+    g, fake = gtv
+    fake.volume_info, fake.current_app = None, None
+    real_sleep = googletv.asyncio.sleep
+
+    async def sleep(t):
+        fake.volume_info = {"level": 3, "max": 15, "muted": False}
+        fake.current_app = "com.google.android.apps.tv.launcherx"
+        await real_sleep(0)
+
+    monkeypatch.setattr(googletv.asyncio, "sleep", sleep)
+    st = g.status()
+    assert st["volume"] == 3 and st["app"].endswith("launcherx")

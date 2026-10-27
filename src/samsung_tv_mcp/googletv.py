@@ -179,7 +179,10 @@ class GoogleTV:
         info = self.status()
         current, top = info.get("volume"), info.get("volume_max") or 100
         if current is None:
-            raise TVError("This Google TV doesn't report its volume; use volume up/down instead.")
+            raise TVError(
+                "This Google TV doesn't report its volume (common when it controls the projector's "
+                "volume over HDMI). Use volume up/down instead: samsung-tv gtv key volup volup"
+            )
         target = round(max(0, min(100, level)) * top / 100)
         steps = target - current
         if steps:
@@ -189,6 +192,11 @@ class GoogleTV:
     def status(self) -> dict:
         async def get():
             remote = await self._connected()
+            # Volume and current app arrive a moment after connecting.
+            for _ in range(30):
+                if remote.volume_info is not None and remote.current_app:
+                    break
+                await asyncio.sleep(0.1)
             info = remote.device_info or {}
             vol = remote.volume_info or {}
             return {"on": remote.is_on, "app": remote.current_app, "volume": vol.get("level"),

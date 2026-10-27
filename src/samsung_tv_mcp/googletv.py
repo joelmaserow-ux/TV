@@ -30,21 +30,24 @@ KEYS = {
     **{f"KEY_{n}": str(n) for n in range(10)},
 }
 
-# Apps by friendly name -> Android package (launched via market://launch?id=...).
+# Apps by friendly name -> (link Google TV hands to the app, Android package). Some devices
+# ignore launches by package name (market://launch?id=...) but follow the app's web link.
 APPS = {
-    "youtube": "com.google.android.youtube.tv",
-    "netflix": "com.netflix.ninja",
-    "disney+": "com.disney.disneyplus", "disney": "com.disney.disneyplus",
-    "prime video": "com.amazon.amazonvideo.livingroom", "prime": "com.amazon.amazonvideo.livingroom",
-    "stan": "au.com.stan.and",
-    "binge": "au.com.streamotion.ares.tv",
-    "kayo": "au.com.streamotion.kayo.tv",
-    "abc iview": "au.net.abc.iview", "iview": "au.net.abc.iview",
-    "sbs on demand": "com.sbs.ondemand.tv",
-    "spotify": "com.spotify.tv.android",
-    "plex": "com.plexapp.android",
-    "play store": "com.android.vending",
+    "youtube": ("https://www.youtube.com", "com.google.android.youtube.tv"),
+    "netflix": ("https://www.netflix.com/title", "com.netflix.ninja"),
+    "disney+": ("https://www.disneyplus.com", "com.disney.disneyplus"),
+    "prime video": ("https://app.primevideo.com", "com.amazon.amazonvideo.livingroom"),
+    "stan": ("https://play.stan.com.au", "au.com.stan.and"),
+    "binge": ("https://binge.com.au", "au.com.streamotion.ares.tv"),
+    "kayo": ("https://kayosports.com.au", "au.com.streamotion.kayo.tv"),
+    "abc iview": ("https://iview.abc.net.au", "au.net.abc.iview"),
+    "sbs on demand": ("https://www.sbs.com.au/ondemand", "com.sbs.ondemand.tv"),
+    "spotify": ("spotify://", "com.spotify.tv.android"),
+    "plex": ("plex://", "com.plexapp.android"),
+    "play store": ("", "com.android.vending"),
 }
+ALIASES = {"disney": "disney+", "disney plus": "disney+", "prime": "prime video", "amazon": "prime video",
+           "iview": "abc iview", "sbs": "sbs on demand"}
 
 
 def _files(host: str) -> tuple[Path, Path]:
@@ -169,10 +172,45 @@ class GoogleTV:
         self._run(self._do(lambda r: r.send_text(text)))
 
     def launch(self, app_or_link: str) -> str:
-        """Open an app by friendly name or package, or a deep link (https://, market://...)."""
-        target = APPS.get(app_or_link.strip().lower(), app_or_link.strip())
-        self._run(self._do(lambda r: r.send_launch_app_command(target)))
-        return target
+        """Open an app by friendly name or package, or a deep link (https://, market://...).
+
+        Checks what's in front afterwards, so it can say whether the app actually opened.
+        """
+        name = app_or_link.strip()
+        key = ALIASES.get(name.lower(), name.lower())
+        link, package = APPS.get(key, ("", ""))
+        if not link and not package:
+            if "://" in name:
+                link = name
+            else:
+                package = name
+        tries = [t for t in (link, package) if t]
+
+        async def go():
+            # Only check the result on devices that report which app is in front.
+            reports_app = await self._wait_for_app("", 2)
+            for target in tries:
+                await self._do(lambda r, t=target: r.send_launch_app_command(t))
+                if not package:
+                    return f"Opened {target}."
+                if not reports_app:
+                    return f"Asked the Google TV to open {name} (it doesn't report what's on screen)."
+                if await self._wait_for_app(package, 6):
+                    return f"Opened {name}."
+            raise TVError(
+                f"Asked the Google TV to open {name}, but it's not showing. Is it installed on the "
+                "projector? (Open it once with the projector's remote, then try again.)"
+            )
+
+        return self._run(go())
+
+    async def _wait_for_app(self, package: str, timeout: float) -> bool:
+        remote = await self._connected()
+        for _ in range(int(timeout * 10)):
+            if remote.current_app and remote.current_app.startswith(package):
+                return True
+            await asyncio.sleep(0.1)
+        return False
 
     def set_volume(self, level: int) -> str:
         """Step the volume to `level` on the device's own scale (e.g. 0-15 on the TP3)."""

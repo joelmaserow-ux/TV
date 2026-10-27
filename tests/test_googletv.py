@@ -39,6 +39,9 @@ class FakeRemote:
 
     def send_launch_app_command(self, target):
         self.sent.append(("launch", target))
+        # Pretend links open their app and packages are ignored, like the TP3's stick.
+        if target.startswith("https://www.disneyplus.com"):
+            self.current_app = "com.disney.disneyplus"
 
     def disconnect(self):
         pass
@@ -59,10 +62,10 @@ def test_commands(gtv):
     g, fake = gtv
     assert g.press(["KEY_UP", "ok"], delay=0) == ["DPAD_UP", "DPAD_CENTER"]
     g.type_text("rick and morty")
-    assert g.launch("Disney+") == "com.disney.disneyplus"
-    g.launch("https://www.netflix.com/title/80014749")
+    assert g.launch("Disney Plus") == "Opened Disney Plus."
+    assert g.launch("https://www.netflix.com/title/80014749") == "Opened https://www.netflix.com/title/80014749."
     assert fake.sent == [("key", "DPAD_UP"), ("key", "DPAD_CENTER"), ("text", "rick and morty"),
-                         ("launch", "com.disney.disneyplus"), ("launch", "https://www.netflix.com/title/80014749")]
+                         ("launch", "https://www.disneyplus.com"), ("launch", "https://www.netflix.com/title/80014749")]
     assert g.status()["device"] == "TOPTRO TP3"
 
 
@@ -94,3 +97,23 @@ def test_status_waits_for_late_volume_info(gtv, monkeypatch):
     monkeypatch.setattr(googletv.asyncio, "sleep", sleep)
     st = g.status()
     assert st["volume"] == 3 and st["app"].endswith("launcherx")
+
+
+def test_launch_falls_back_to_package_then_reports_failure(gtv, monkeypatch):
+    g, fake = gtv
+    monkeypatch.setattr(googletv.asyncio, "sleep", _instant)
+    with pytest.raises(googletv.TVError, match="not showing"):
+        g.launch("Stan")
+    assert fake.sent == [("launch", "https://play.stan.com.au"), ("launch", "au.com.stan.and")]
+
+
+async def _instant(_):
+    pass
+
+
+def test_launch_without_app_reporting_just_sends(gtv, monkeypatch):
+    g, fake = gtv
+    fake.current_app = None
+    monkeypatch.setattr(googletv.asyncio, "sleep", _instant)
+    assert "doesn't report" in g.launch("Stan")
+    assert fake.sent == [("launch", "https://play.stan.com.au")]

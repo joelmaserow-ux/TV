@@ -93,6 +93,24 @@ browser menu) so it opens like an app. Keep the window running; the computer mus
 
 ---
 
+## Google TV / Android TV devices (e.g. the TOPTRO TP3 projector)
+
+Pair once (a code appears on the screen), then control it from the command line:
+
+```powershell
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 pair
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 status
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 key up up ok
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 volume 20
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 app Disney+
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 link https://www.youtube.com/watch?v=aqz-KE-bpKQ
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 type rick and morty
+uvx --from $tv samsung-tv gtv --ip 192.168.1.50 power off
+```
+
+Set `GOOGLE_TV_HOST` to skip `--ip`. It uses the same protocol as the Google TV phone app
+(`androidtvremote2`); no developer mode needed.
+
 ## Run the remote on an Android phone (no laptop)
 
 Any Android phone that **stays at home on the TV's Wi-Fi** can run the family remote instead of a

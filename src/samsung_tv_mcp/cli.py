@@ -11,6 +11,33 @@ from .legacy import TVError
 from .tv import TV
 
 
+def _gtv(args) -> str:
+    from .googletv import GoogleTV
+
+    if not args.ip:
+        raise ValueError("Give the Google TV's IP address with --ip (Settings > Network & Internet on it).")
+    gtv = GoogleTV(args.ip)
+    rest = " ".join(args.args)
+    match args.command:
+        case "pair":
+            print(gtv.pair_start())
+            return gtv.pair_finish(input("Code shown on the screen: "))
+        case "status":
+            return "\n".join(f"{k}: {v}" for k, v in gtv.status().items())
+        case "key":
+            return "Pressed " + ", ".join(gtv.press(args.args))
+        case "app" | "link":
+            return "Opened " + gtv.launch(rest)
+        case "type":
+            gtv.type_text(rest)
+            return "Typed."
+        case "volume":
+            return gtv.set_volume(int(rest))
+        case "power":
+            return gtv.power({"on": True, "off": False}.get(rest.lower()) if rest else None)
+    raise ValueError(args.command)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="samsung-tv", description="Control a Samsung H-series TV.")
     p.add_argument("-v", "--verbose", action="store_true", help="print protocol debug logs")
@@ -45,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
     ep.add_argument("episode", type=int)
     sub.add_parser("episodes", help="list a series' seasons and episodes (TVmaze)").add_argument("show")
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
+    gtv = sub.add_parser("gtv", help="control a Google TV / Android TV (e.g. the projector)")
+    gtv.add_argument("--ip", default=os.environ.get("GOOGLE_TV_HOST"), help="its IP address ($GOOGLE_TV_HOST)")
+    gtv.add_argument("command", choices=["pair", "status", "key", "app", "link", "type", "volume", "power"])
+    gtv.add_argument("args", nargs="*")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")
     sub.add_parser("status")
@@ -123,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
             case "netflix-profiles":
                 from . import netflix
                 out = "Profiles, top to bottom: " + ", ".join(netflix.set_profiles(tv.s.host, args.names))
+            case "gtv":
+                out = _gtv(args)
             case "install-claude":
                 from .install import install
                 out = install(tv.s.host, args.config)

@@ -20,7 +20,7 @@ echo "==> Installing the remote"
 export AIOHTTP_NO_EXTENSIONS=1 YARL_NO_EXTENSIONS=1 MULTIDICT_NO_EXTENSIONS=1 \
        FROZENLIST_NO_EXTENSIONS=1 PROPCACHE_NO_EXTENSIONS=1 BUILD_EXTENSION=no \
        PIP_BREAK_SYSTEM_PACKAGES=1
-pip install "samsungtvws[async,encrypted]>=3,<4" "pyytlounge>=3,<4" "yt-dlp>=2025.1.1"
+pip install "samsungtvws[async,encrypted]>=3,<4" "pyytlounge>=3,<4" "yt-dlp>=2025.1.1" "androidtvremote2>=0.3,<1"
 pip install --no-deps --force-reinstall "$REPO"
 
 echo "==> Adding the tv-remote command"

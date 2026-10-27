@@ -384,3 +384,59 @@ class GoogleTVDevice:
         if youtube.play(self.s.host, video_id, start):
             return f"Playing {link} on the projector."
         return f"Sent {link} to the projector's YouTube app."
+
+
+LABELS = {
+    "youtube": "YouTube", "netflix": "Netflix", "disney+": "Disney+", "prime video": "Prime Video",
+    "stan": "Stan", "binge": "Binge", "kayo": "Kayo", "abc iview": "ABC iview",
+    "sbs on demand": "SBS On Demand", "spotify": "Spotify", "plex": "Plex",
+}
+
+
+class Projector(GoogleTVDevice):
+    """The Google TV device with the same methods the family remote calls on the Samsung TV."""
+
+    name = "projector"
+
+    def set_volume(self, level: int) -> str:
+        return self.gtv.set_volume(level)
+
+    def step_volume(self, steps: int) -> str:
+        count = min(abs(int(steps)), 30)
+        if count:
+            self.press(["KEY_VOLUP" if steps > 0 else "KEY_VOLDOWN"] * count, delay=0.15)
+        return ""
+
+    def get_volume(self) -> str:
+        info = self.gtv.status()
+        if info.get("volume") is None:
+            raise TVError("The projector isn't reporting its volume right now.")
+        return f"Volume is {info['volume']}{' (muted)' if info.get('muted') else ''}."
+
+    def volume_max(self) -> int:
+        try:
+            return int(self.gtv.status().get("volume_max") or 15)
+        except TVError:
+            return 15
+
+    def set_mute(self, mute: bool | None) -> str:
+        self.press(["KEY_MUTE"])
+        return "Toggled mute."
+
+    def power_off(self) -> str:
+        return self.gtv.power(False)
+
+    def power_on(self) -> str:
+        return self.gtv.power(True)
+
+    def is_on(self) -> bool:
+        try:
+            return bool(self.gtv.status().get("on"))
+        except TVError:
+            return False
+
+    def status(self) -> str:
+        return f"The projector is {'on' if self.is_on() else 'off'}."
+
+    def apps(self) -> list[dict]:
+        return [{"id": key, "name": label} for key, label in LABELS.items()]

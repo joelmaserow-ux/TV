@@ -108,6 +108,11 @@ uvx --from $tv samsung-tv gtv --ip 192.168.1.50 type rick and morty
 uvx --from $tv samsung-tv gtv --ip 192.168.1.50 power off
 ```
 
+To add it to the family remote (a TV / Projector switch appears at the top), start the remote
+with `samsung-tv remote --projector 192.168.0.71` once; it's remembered. Netflix and YouTube on it
+use the same routines as the TV (`samsung-tv --gtv <ip> netflix Ben --show "..."`); Netflix is
+force-stopped from Settings first so it reopens on the profile screen.
+
 Set `GOOGLE_TV_HOST` to skip `--ip`. It uses the same protocol as the Google TV phone app
 (`androidtvremote2`); no developer mode needed.
 

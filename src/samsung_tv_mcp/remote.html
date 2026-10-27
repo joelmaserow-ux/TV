@@ -57,6 +57,11 @@
   input:focus { outline: none; border-color: var(--accent); }
   form button { min-width: 84px; }
 
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--btn); border-radius: 14px;
+    padding: 4px; margin-bottom: 12px; }
+  .seg button { min-height: 40px; background: transparent; border-radius: 10px; font-size: 15px; }
+  .seg button.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+
   /* Remote tab */
   .vol { display: grid; grid-template-columns: 50px 1fr 50px; gap: 10px; align-items: center; }
   input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
@@ -160,6 +165,11 @@
     <div class="status"><span id="dot" class="dot"></span><span id="statusText">…</span></div>
     <button class="icon danger" data-action="off" aria-label="Turn TV off"><svg class="icon-svg"><use href="#i-power"/></svg></button>
   </header>
+
+  <div id="deviceSwitch" class="seg hidden" role="tablist" aria-label="Which screen">
+    <button type="button" data-device="tv">TV</button>
+    <button type="button" data-device="projector">Projector</button>
+  </div>
 
   <div id="busy" class="hidden" role="status"><span class="spin"></span><span id="busyText">Working…</span></div>
 
@@ -319,6 +329,10 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   };
   let pin = store.get("tvPin");
+  let device = store.get("device") || "tv";
+  let stepSize = 2;
+  let deviceOn = true;
+  const deviceName = () => (device === "projector" ? "Projector" : "TV");
 
   let toastTimer;
   function toast(msg, err) {
@@ -335,7 +349,7 @@
       const res = await fetch("/api", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Remote-Pin": pin },
-        body: JSON.stringify(body),
+        body: JSON.stringify(Object.assign({ device }, body)),
       });
       const data = await res.json();
       if (res.status === 401) { lock(); return data; }
@@ -377,9 +391,13 @@
     const b = e.target.closest("button");
     if (!b || b.closest("form")) return;
     if (b.dataset.keys) { buzz(); call({ action: "key", keys: b.dataset.keys.split(",") }, true); }
-    else if (b.dataset.step) { buzz(); call({ action: "step", steps: +b.dataset.step }, true).then(refreshVolume); }
+    else if (b.dataset.step) { buzz(); call({ action: "step", steps: Math.sign(+b.dataset.step) * stepSize }, true).then(refreshVolume); }
     else if (b.dataset.app) { buzz(); call({ action: "app", name: b.dataset.app }); }
-    else if (b.dataset.action === "off") { if (confirm("Turn the TV off?")) call({ action: "off" }).then(refresh); }
+    else if (b.dataset.action === "off") {
+      if (device === "projector" && !deviceOn) { toast("Turning the projector on…"); call({ action: "on" }).then(() => setTimeout(refresh, 4000)); }
+      else if (confirm("Turn the " + deviceName() + " off?")) call({ action: "off" }).then(refresh);
+    }
+    else if (b.dataset.device) switchDevice(b.dataset.device);
   });
   $("muteBtn").addEventListener("click", () => { buzz(); call({ action: "mute" }).then(refreshVolume); });
   $("volume").addEventListener("change", (e) => call({ action: "volume", level: +e.target.value }, true).then(refreshVolume));
@@ -398,7 +416,9 @@
     const r = await call({ action: "status" }, true);
     const on = r.ok && /is on/.test(r.message || "");
     $("dot").className = "dot " + (r.ok ? (on ? "on" : "off") : "");
-    $("statusText").textContent = r.ok ? (on ? "TV on" : "TV off") : "Offline";
+    deviceOn = on;
+    $("statusText").textContent = r.ok ? deviceName() + (on ? " on" : " off") : "Offline";
+    document.querySelector('[data-action="off"]').setAttribute("aria-label", (device === "projector" && !on ? "Turn on the " : "Turn off the ") + deviceName());
     if (on) refreshVolume();
   }
 
@@ -505,7 +525,7 @@
 
   function openSheet(v) {
     current = v;
-    $("sheetWho").textContent = profile || "pick a profile";
+    $("sheetWho").textContent = (profile || "pick a profile") + " · " + deviceName();
     $("sheetTitle").textContent = v.title;
     $("sheetMeta").textContent = [v.kind, v.year].filter(Boolean).join(" · ");
     const img = $("sheetPoster");
@@ -597,7 +617,7 @@
   async function checkJob() {
     const r = await call({ action: "job" }, true);
     const job = json(r);
-    if (job && job.busy) { showBusy("The TV is busy with Netflix…"); watchJob(); }
+    if (job && job.busy) { showBusy("Busy with Netflix…"); watchJob(); }
   }
 
   // ---- what this TV supports ----
@@ -607,9 +627,11 @@
     if (!caps) return;
     const bad = new Set(caps.unsupported || []);
     document.querySelectorAll("[data-keys]").forEach((b) => {
-      if (b.dataset.keys.split(",").some((k) => bad.has(k))) b.classList.add("hidden");
+      b.classList.toggle("hidden", b.dataset.keys.split(",").some((k) => bad.has(k)));
     });
-    if (bad.has("KEY_POWEROFF")) document.querySelector('[data-action="off"]').classList.add("hidden");
+    document.querySelector('[data-action="off"]').classList.toggle("hidden", bad.has("KEY_POWEROFF"));
+    $("volume").max = caps.volume_max || 100;
+    stepSize = (caps.volume_max || 100) <= 30 ? 1 : 2;
     renderApps(caps.found_apps);
     const profiles = caps.netflix_profiles || [];
     renderProfiles(profiles);
@@ -627,12 +649,36 @@
       box.append(b);
     }
     const all = document.createElement("button");
-    all.className = "small"; all.dataset.keys = "KEY_CONTENTS"; all.textContent = "All apps (Smart Hub)";
+    all.className = "small"; all.dataset.keys = "KEY_CONTENTS";
+    all.textContent = device === "projector" ? "Home screen" : "All apps (Smart Hub)";
     box.append(all);
-    $("appsHint").textContent = "Other apps: open All apps and pick with the arrows on the Remote tab.";
+    $("appsHint").textContent = device === "projector"
+      ? "Other apps: open the Home screen and pick with the arrows on the Remote tab."
+      : "Other apps: open All apps and pick with the arrows on the Remote tab.";
   }
 
-  function start() {
+  function markDevice() {
+    document.querySelectorAll("[data-device]").forEach((b) => b.classList.toggle("active", b.dataset.device === device));
+  }
+  function switchDevice(name) {
+    if (name === device) return;
+    device = name; store.set("device", name);
+    markDevice();
+    $("results").innerHTML = ""; $("netflixResults").innerHTML = "";
+    $("statusText").textContent = "…";
+    $("volText").textContent = "Volume";
+    applyCapabilities();
+    refresh();
+  }
+  async function loadDevices() {
+    const r = await call({ action: "devices" }, true);
+    const list = (r.ok && json(r)) || ["tv"];
+    if (!list.includes(device)) { device = "tv"; store.set("device", "tv"); }
+    $("deviceSwitch").classList.toggle("hidden", list.length < 2);
+    markDevice();
+  }
+  async function start() {
+    await loadDevices();
     applyCapabilities();
     refresh();
     checkJob();

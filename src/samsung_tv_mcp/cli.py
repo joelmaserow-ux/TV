@@ -50,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     rem = sub.add_parser("remote", help="run the family web remote for phones and laptops")
     rem.add_argument("--port", type=int, default=8765)
     rem.add_argument("--pin", help="set a new family PIN (otherwise the saved one is reused)")
+    rem.add_argument("--projector", metavar="IP", help="also control a Google TV projector (remembered)")
     typ = sub.add_parser("type", help="type text into the TV's on-screen keyboard")
     typ.add_argument("text")
     typ.add_argument("--enter", action="store_true", help="also finish/submit the text")
@@ -124,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
                 out = tv.diagnose()
             case "remote":
                 from .webremote import serve
-                serve(args.port, args.pin)
+                serve(args.port, args.pin, args.projector)
                 return 0
             case "type":
                 from .text_input import type_text

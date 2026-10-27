@@ -146,3 +146,49 @@ def test_netflix_watch_passes_season_and_episode(server, monkeypatch):
             break
         __import__("time").sleep(0.05)
     assert got == [("Ben", "Rick and Morty", 2, 4)]
+
+
+class FakeProjector(FakeTV):
+    def __init__(self):
+        super().__init__()
+        self.s = type("S", (), {"host": "192.168.0.71"})()
+        self.on = False
+
+    def power_on(self):
+        self.on = True
+        return "Sent power."
+
+    def status(self):
+        return f"The projector is {'on' if self.on else 'off'}."
+
+    def apps(self):
+        return [{"id": "disney+", "name": "Disney+"}]
+
+    def volume_max(self):
+        return 15
+
+
+def test_device_switch_routes_to_projector(tmp_path, monkeypatch):
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    tv, proj = FakeTV(), FakeProjector()
+    app = webremote.RemoteApp(tv, "1234", proj)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), webremote.make_handler(app))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_port}"
+    try:
+        assert json.loads(post(base, {"action": "devices"})[1]["message"]) == ["tv", "projector"]
+        post(base, {"action": "key", "keys": ["KEY_UP"], "device": "projector"})
+        post(base, {"action": "key", "keys": ["KEY_DOWN"]})
+        assert proj.remote.sent == ["KEY_UP"] and tv.remote.sent == ["KEY_DOWN"]
+        caps = json.loads(post(base, {"action": "capabilities", "device": "projector"})[1]["message"])
+        assert caps["volume_max"] == 15 and caps["found_apps"][0]["name"] == "Disney+" and caps["power_on"]
+        assert post(base, {"action": "on", "device": "projector"})[1]["ok"] and proj.on
+        assert "can't be turned on" in post(base, {"action": "on"})[1]["message"]
+    finally:
+        httpd.shutdown()
+
+
+def test_no_projector_configured(server):
+    base, _ = server
+    assert json.loads(post(base, {"action": "devices"})[1]["message"]) == ["tv"]
+    assert "No projector" in post(base, {"action": "key", "keys": ["KEY_UP"], "device": "projector"})[1]["message"]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import os
 import secrets
 import socket
 import threading
@@ -25,8 +26,9 @@ PAGE = (Path(__file__).parent / "remote.html").read_text(encoding="utf-8")
 
 
 class RemoteApp:
-    def __init__(self, tv: TV, pin: str):
+    def __init__(self, tv: TV, pin: str, projector=None):
         self.tv = tv
+        self.projector = projector
         self.pin = pin
         # One command at a time: the TV protocols don't like overlapping connections.
         self.lock = threading.Lock()
@@ -45,7 +47,15 @@ class RemoteApp:
             self.found_apps = []
         print("Apps this TV can open: " + (", ".join(a["name"] for a in self.found_apps) or "none found"), flush=True)
 
-    def start_job(self, fn, *args, label: str) -> str:
+    def device(self, body: dict):
+        """The Samsung TV, or the projector when the page asks for it."""
+        if body.get("device") == "projector":
+            if self.projector is None:
+                raise TVError("No projector is set up. Start the remote with --projector <its IP>.")
+            return self.projector
+        return self.tv
+
+    def start_job(self, fn, *args, label: str, device=None) -> str:
         """Run a long TV routine (like the Netflix search) in the background.
 
         It takes the TV lock for its whole run, so other buttons can't interleave key presses
@@ -58,7 +68,7 @@ class RemoteApp:
         def run():
             try:
                 with self.lock:
-                    self.job_result = {"ok": True, "message": fn(self.tv, *args)}
+                    self.job_result = {"ok": True, "message": fn(device or self.tv, *args)}
             except Exception as exc:
                 self.job_result = {"ok": False, "message": str(exc)}
             finally:
@@ -70,35 +80,37 @@ class RemoteApp:
 
     def handle(self, body: dict) -> str:
         action = body.get("action")
-        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes"):
+        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes", "devices"):
             raise TVError(f"Busy: {self.job}. Wait for it to finish.")
         # These don't press keys, so they never wait behind a long job holding the lock.
-        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find", "netflix_episodes"):
+        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find", "netflix_episodes", "devices"):
             return self._handle(body)
         with self.lock:
             return self._handle(body)
 
     def _handle(self, body: dict) -> str:
         action = body.get("action")
+        dev = self.device(body)
+        projector = dev is self.projector
         match action:
             case "key":
                 keys = [normalize_key(k) for k in body.get("keys", [])][:20]
-                self.tv.press(keys, delay=0.3)
+                dev.press(keys, delay=0.3)
                 return ""
             case "volume":
-                return self.tv.set_volume(int(body["level"]))
+                return dev.set_volume(int(body["level"]))
             case "step":
-                return self.tv.step_volume(int(body["steps"]))
+                return dev.step_volume(int(body["steps"]))
             case "get_volume":
-                return self.tv.get_volume()
+                return dev.get_volume()
             case "mute":
-                return self.tv.set_mute(None)
+                return dev.set_mute(None)
             case "off":
-                return self.tv.power_off()
+                return dev.power_off()
             case "app":
-                return self.tv.open_app(str(body["name"]))
+                return dev.open_app(str(body["name"]))
             case "youtube":
-                return self.tv.play_youtube(str(body["url"]))
+                return dev.play_youtube(str(body["url"]))
             case "netflix_watch":
                 season = int(body["season"]) if body.get("season") else None
                 episode = int(body["episode"]) if body.get("episode") else None
@@ -107,8 +119,8 @@ class RemoteApp:
                     what += f" S{season or 1} E{episode or 1}"
                 return self.start_job(
                     netflix.watch, str(body["profile"]), str(body.get("show", "")), season, episode,
-                    bool(body.get("play")),
-                    label="Opening Netflix" + (f" for {what}" if what else ""))
+                    bool(body.get("play")), device=dev,
+                    label=("Projector: " if projector else "") + "Opening Netflix" + (f" for {what}" if what else ""))
             case "netflix_episodes":
                 from .episodes import seasons
                 return json.dumps(seasons(str(body.get("title", ""))[:100], body.get("year") or None))
@@ -118,26 +130,37 @@ class RemoteApp:
             case "job":
                 return json.dumps({"busy": self.job is not None, "last": self.job_result})
             case "youtube_link":
-                return self.tv.link_youtube(str(body["code"]))
+                return dev.link_youtube(str(body["code"]))
             case "search":
                 from .youtube_search import search
                 return json.dumps(search(str(body.get("query", ""))[:200]))
             case "status":
-                return self.tv.status()
+                return dev.status()
+            case "on":
+                if not projector:
+                    raise TVError("This TV can't be turned on over the network; use its remote.")
+                return dev.power_on()
+            case "devices":
+                return json.dumps(["tv"] + (["projector"] if self.projector else []))
             case "capabilities":
+                if projector:
+                    return json.dumps({
+                        "unsupported": [], "found_apps": dev.apps(), "volume_max": dev.volume_max(),
+                        "netflix_profiles": netflix.load(dev.s.host)["profiles"], "power_on": True,
+                    })
                 data = keymap.load(self.tv.s.host)
                 return json.dumps({
                     "unsupported": keymap.unsupported(data),
                     "found_apps": self.found_apps,
                     "netflix_profiles": netflix.load(self.tv.s.host)["profiles"]
                     if any(a["id"] == "Netflix" for a in self.found_apps or []) else [],
-                    "apps": data.get("apps", {}),
-                    "typing": data.get("typing"),
+                    "volume_max": 100,
+                    "power_on": False,
                 })
         raise ValueError(f"Unknown action {action!r}")
 
 
-QUIET_ACTIONS = {"status", "get_volume", "capabilities", "job"}
+QUIET_ACTIONS = {"status", "get_volume", "capabilities", "job", "devices"}
 
 
 def _log(handler, body: dict, outcome: str, message: str) -> None:
@@ -226,15 +249,38 @@ def load_pin(host: str, pin: str | None = None) -> str:
     return pin
 
 
-def serve(port: int = 8765, pin: str | None = None) -> None:
+def projector_host(host: str, given: str | None = None) -> str | None:
+    """The projector's IP: given now (and remembered), $GOOGLE_TV_HOST, or remembered earlier."""
+    path = credentials_path(host).with_name("remote-projector")
+    if given:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(given.strip())
+        return given.strip()
+    if os.environ.get("GOOGLE_TV_HOST"):
+        return os.environ["GOOGLE_TV_HOST"].strip()
+    try:
+        return path.read_text().strip() or None
+    except OSError:
+        return None
+
+
+def serve(port: int = 8765, pin: str | None = None, projector: str | None = None) -> None:
     settings = Settings.from_env()
     pin = load_pin(settings.host, pin)
-    app = RemoteApp(TV(settings), pin)
+    projector_ip = projector_host(settings.host, projector)
+    device = None
+    if projector_ip:
+        from .googletv import Projector
+
+        device = Projector(projector_ip)
+    app = RemoteApp(TV(settings), pin, device)
     threading.Thread(target=app.discover_apps, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(app))
     print("Family TV remote is running.\n")
     print(f"  Open on any phone or laptop on your Wi-Fi:  http://{lan_ip(settings.host)}:{port}")
-    print(f"  PIN: {pin}\n")
+    print(f"  PIN: {pin}")
+    print(f"  Projector: {projector_ip}" if projector_ip else "  Projector: not set up (add --projector <IP>)")
+    print()
     print("Keep this window open. Press Ctrl+C to stop.")
     try:
         server.serve_forever()

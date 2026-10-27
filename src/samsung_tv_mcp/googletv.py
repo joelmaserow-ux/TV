@@ -367,11 +367,20 @@ class GoogleTVDevice:
         video_id, start = parse_youtube(video)
         link = f"https://youtu.be/{video_id}{f'?t={start}' if start else ''}"
         if not youtube.is_linked(self.s.host):
-            self.gtv.launch("https://www.youtube.com/watch?v=" + video_id)
+            # Without a link, open the video's own link. A fresh start stops on "Who's
+            # watching?" and drops the video, so pick the account and send the link again.
+            watch = "https://www.youtube.com/watch?v=" + video_id + (f"&t={start}s" if start else "")
+            just_opened = self.dial.status("YouTube") != "running"
+            self.gtv.launch(watch)
+            if just_opened:
+                time.sleep(self.PICK_ACCOUNT_AFTER)
+                self.press(["KEY_ENTER"])
+                time.sleep(6)
+                self.gtv.launch(watch)
             return (
-                f"Opened YouTube for {link}, but videos only start reliably once YouTube is linked: on "
-                "the projector open YouTube > Settings > Link with TV code, then run "
-                "`samsung-tv --gtv <ip> youtube-link <code>`."
+                f"Opened {link} on the projector. If it stops on YouTube's home screen, link YouTube "
+                "once: on the projector open YouTube > Settings > Link with TV code, and enter the "
+                "code under Fix YouTube on the remote's YouTube tab."
             )
         just_opened = self.dial.status("YouTube") != "running"
         if just_opened:

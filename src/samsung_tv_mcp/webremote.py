@@ -143,10 +143,13 @@ class RemoteApp:
             case "devices":
                 return json.dumps(["tv"] + (["projector"] if self.projector else []))
             case "capabilities":
+                from . import youtube
+                linked = youtube.is_linked(dev.s.host)
                 if projector:
                     return json.dumps({
                         "unsupported": [], "found_apps": dev.apps(), "volume_max": dev.volume_max(),
                         "netflix_profiles": netflix.load(dev.s.host)["profiles"], "power_on": True,
+                        "youtube_linked": linked,
                     })
                 data = keymap.load(self.tv.s.host)
                 return json.dumps({
@@ -156,6 +159,7 @@ class RemoteApp:
                     if any(a["id"] == "Netflix" for a in self.found_apps or []) else [],
                     "volume_max": 100,
                     "power_on": False,
+                    "youtube_linked": linked,
                 })
         raise ValueError(f"Unknown action {action!r}")
 

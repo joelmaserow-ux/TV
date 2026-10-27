@@ -170,3 +170,24 @@ def test_any_uri_scheme_is_sent_as_a_link(gtv):
     g, fake = gtv
     assert g.launch("package:com.netflix.ninja#Intent;end").startswith("Opened package:")
     assert fake.sent == [("launch", "package:com.netflix.ninja#Intent;end")]
+
+
+def test_unlinked_youtube_picks_the_account_then_resends_the_video(tmp_path, monkeypatch):
+    import time
+
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    dev = googletv.GoogleTVDevice("10.0.0.7")
+    fake = FakeGTV()
+    dev.gtv = fake
+    dev.dial = googletv._AppState(fake)
+    msg = dev.play_youtube("https://www.youtube.com/watch?v=aqz-KE-bpKQ")
+    link = "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+    assert fake.launched == [link, link]  # again after "Who's watching?"
+    assert fake.keys == ["KEY_ENTER"]
+    assert "Link with TV code" in msg
+
+    fake.launched, fake.keys = [], []
+    fake.app = "com.google.android.youtube.tv"  # already open: no account picker
+    dev.play_youtube("https://youtu.be/aqz-KE-bpKQ?t=30")
+    assert fake.launched == [link + "&t=30s"] and fake.keys == []

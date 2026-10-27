@@ -243,10 +243,10 @@
       </form>
     </div>
     <div class="card">
-      <details>
-        <summary>Fix YouTube ▾</summary>
-        <p class="hint" style="margin-top:0">If videos stop starting: on the TV open YouTube → Settings →
-          <b>Link with TV code</b>, and enter the code here.</p>
+      <details id="ytFix">
+        <summary id="ytFixTitle">Fix YouTube ▾</summary>
+        <p class="hint" style="margin-top:0"><span id="ytFixWhen">If videos stop starting</span>: on the
+          <span class="devName">TV</span> open YouTube → Settings → <b>Link with TV code</b>, and enter the code here.</p>
         <form id="linkForm">
           <input id="linkCode" inputmode="numeric" placeholder="123 456 789 012" aria-label="YouTube TV code" autocomplete="off">
           <button type="submit">Link</button>
@@ -473,7 +473,7 @@
     const code = $("linkCode").value.trim();
     if (!code) return;
     const r = await call({ action: "youtube_link", code });
-    if (r.ok) $("linkCode").value = "";
+    if (r.ok) { $("linkCode").value = ""; applyCapabilities(); }
   });
 
   // ---- Netflix ----
@@ -633,6 +633,11 @@
     $("volume").max = caps.volume_max || 100;
     stepSize = (caps.volume_max || 100) <= 30 ? 1 : 2;
     renderApps(caps.found_apps);
+    const linked = caps.youtube_linked !== false;
+    $("ytFix").open = !linked;
+    $("ytFixTitle").textContent = linked ? "Fix YouTube ▾" : "Set up YouTube (once) ▾";
+    $("ytFixWhen").textContent = linked ? "If videos stop starting" : "So videos start every time";
+    document.querySelectorAll(".devName").forEach((e) => { e.textContent = device === "projector" ? "projector" : "TV"; });
     const profiles = caps.netflix_profiles || [];
     renderProfiles(profiles);
     const known = Array.isArray(caps.found_apps);

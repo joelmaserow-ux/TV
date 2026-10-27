@@ -204,8 +204,9 @@ def test_episode_steps():
     steps = netflix.episode_steps(3, 5)
     U = "KEY_UP"
     to_episodes = [D] * 7 + [U] * 4 + [OK]
-    assert [k for k, _ in steps] == [to_episodes, [L], [D, D, R], [D, D, D, D, OK]]
-    assert [k for k, _ in netflix.episode_steps(1, 1)] == [to_episodes, [L], [R], [OK]]
+    top = [U] * 25  # the season list can start on any season
+    assert [k for k, _ in steps] == [to_episodes, [L], top, [D, D, R], [D, D, D, D, OK]]
+    assert [k for k, _ in netflix.episode_steps(1, 1)] == [to_episodes, [L], top, [R], [OK]]
     with pytest.raises(ValueError):
         netflix.episode_steps(0, 1)
 

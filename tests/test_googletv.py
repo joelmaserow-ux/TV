@@ -161,3 +161,9 @@ def test_netflix_on_google_tv_uses_its_own_exit_and_search_route(tmp_path, monke
     assert after[:3] == ["KEY_UP", "KEY_LEFT", "KEY_ENTER"]  # the projector's route to Search
     assert after[3:3 + len(netflix.type_keys("rick"))] == netflix.type_keys("rick")
     assert fake.launched == ["Netflix", "Netflix"]
+
+
+def test_any_uri_scheme_is_sent_as_a_link(gtv):
+    g, fake = gtv
+    assert g.launch("package:com.netflix.ninja#Intent;end").startswith("Opened package:")
+    assert fake.sent == [("launch", "package:com.netflix.ninja#Intent;end")]

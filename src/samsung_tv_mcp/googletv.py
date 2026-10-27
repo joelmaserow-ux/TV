@@ -180,7 +180,10 @@ class GoogleTV:
         key = ALIASES.get(name.lower(), name.lower())
         link, package = APPS.get(key, ("", ""))
         if not link and not package:
-            if "://" in name:
+            from urllib.parse import urlparse
+
+            # Anything with a URI scheme (https:, market:, package:...) is a link, not a package.
+            if urlparse(name).scheme:
                 link = name
             else:
                 package = name

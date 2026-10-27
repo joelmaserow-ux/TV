@@ -85,6 +85,19 @@ def profile_keys(profiles: list[str], name: str) -> list[str]:
     return ["KEY_DOWN"] * (len(profiles) + 1) + ["KEY_UP"] * (len(profiles) - 1 - index) + ["KEY_ENTER"]
 
 
+# The few presses that differ between devices; everything else (profile list, keyboard,
+# results, episodes) is the same Netflix layout. Devices can override via `netflix_layout`.
+SAMSUNG_LAYOUT = {
+    # Exit asks "Are you sure you want to exit Netflix?": Right is Yes.
+    "exit": ["KEY_EXIT", "KEY_RIGHT", "KEY_ENTER"],
+    "to_search": ["KEY_LEFT", "KEY_UP", "KEY_ENTER"],
+}
+
+
+def layout(tv) -> dict:
+    return {**SAMSUNG_LAYOUT, **(getattr(tv, "netflix_layout", None) or {})}
+
+
 def _state(tv) -> str:
     try:
         return tv.dial.status("Netflix")
@@ -114,12 +127,14 @@ def _fully_exit(tv, wait: float, attempts: int = 3) -> None:
     # Only trust the TV's running/stopped report for Netflix if it ever says "running".
     reports_state = _wait_for_state(tv, "running", 30)
     time.sleep(wait)
+    first, *confirm = layout(tv)["exit"]
     for _ in range(attempts):
-        tv.press(["KEY_EXIT"])
+        tv.press([first])
         time.sleep(1.5)  # let the "Are you sure?" dialog appear
-        tv.press(["KEY_RIGHT"])
-        time.sleep(0.5)
-        tv.press(["KEY_ENTER"])
+        for i, key in enumerate(confirm):
+            if i:
+                time.sleep(0.5)
+            tv.press([key])
         if not reports_state:
             time.sleep(3)
             return
@@ -210,7 +225,7 @@ def to_first_result(pos: tuple[int, int]) -> list[str]:
     return _moves(pos, (0, 0)) + ["KEY_UP", "KEY_RIGHT", "KEY_RIGHT", "KEY_ENTER"]
 
 
-# From the home screen to the search keyboard.
+# From the home screen to the search keyboard (on the Samsung).
 TO_SEARCH = ["KEY_LEFT", "KEY_UP", "KEY_ENTER"]
 
 
@@ -226,7 +241,7 @@ def search(tv, title: str) -> str:
     typed = normalize_title(title)
     if not typed:
         raise ValueError("Type the name of a show or movie.")
-    _press_slowly(tv, TO_SEARCH, 0.8)
+    _press_slowly(tv, layout(tv)["to_search"], 0.8)
     time.sleep(float(data.get("keyboard_wait", 4)))
     keys, end = _type(typed)
     _press_slowly(tv, keys, float(data.get("type_gap", 0.4)))

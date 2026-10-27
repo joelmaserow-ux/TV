@@ -228,6 +228,19 @@ class GoogleTV:
             self.press(["KEY_VOLUP" if steps > 0 else "KEY_VOLDOWN"] * min(abs(steps), 100), delay=0.15)
         return f"Volume set to {level}" + (f" (of {top})." if top else ".")
 
+    def foreground(self) -> str | None:
+        """The app in front, or None if this device doesn't report it."""
+
+        async def get():
+            remote = await self._connected()
+            for _ in range(20):
+                if remote.current_app:
+                    break
+                await asyncio.sleep(0.1)
+            return remote.current_app or None
+
+        return self._run(get())
+
     def status(self) -> dict:
         async def get():
             remote = await self._connected()
@@ -273,3 +286,88 @@ def to_keycode(key: str) -> str:
 
 def default_host() -> str | None:
     return os.environ.get("GOOGLE_TV_HOST") or None
+
+
+class _AppState:
+    """DIAL-like running/stopped answers from the foreground app, for the Netflix routine."""
+
+    def __init__(self, gtv: GoogleTV):
+        self.gtv = gtv
+
+    def status(self, name: str) -> str:
+        key = ALIASES.get(name.lower(), name.lower())
+        package = APPS.get(key, ("", name))[1]
+        app = self.gtv.foreground()
+        if app is None:
+            return "unknown"
+        return "running" if app.startswith(package) else "stopped"
+
+
+class GoogleTVDevice:
+    """Makes a Google TV look enough like the Samsung `TV` for the shared Netflix and YouTube
+    routines: same Netflix screens, just a different route to Search and a Back-based exit."""
+
+    netflix_layout = {
+        # Back on Netflix's home asks whether to exit; Right is Yes.
+        "exit": ["KEY_RETURN", "KEY_RIGHT", "KEY_ENTER"],
+        # After picking a profile: Up, Left, OK lands on "a" of the search keyboard.
+        "to_search": ["KEY_UP", "KEY_LEFT", "KEY_ENTER"],
+    }
+    PICK_ACCOUNT_AFTER = 12.0
+
+    def __init__(self, host: str):
+        from types import SimpleNamespace
+
+        self.gtv = GoogleTV(host)
+        self.s = SimpleNamespace(host=host)
+        self.dial = _AppState(self.gtv)
+
+    def press(self, keys: list[str], delay: float = 0.3) -> list[str]:
+        return self.gtv.press(keys, delay)
+
+    def _launch(self, name: str, params: str = "") -> None:
+        try:
+            self.gtv.launch(name)
+        except TVError:
+            # A launch the device didn't confirm still often worked; the routine checks state.
+            pass
+
+    def open_app(self, name: str, params: str = "") -> str:
+        return self.gtv.launch(name)
+
+    def link_youtube(self, code: str) -> str:
+        from . import youtube
+
+        name = youtube.link(self.s.host, code)
+        return f"Linked to YouTube on {name}."
+
+    def play_youtube(self, video: str) -> str:
+        """Cast a video to the device's YouTube app (needs a one-time Link with TV code)."""
+        import time
+
+        from . import youtube
+        from .tv import parse_youtube
+
+        video_id, start = parse_youtube(video)
+        link = f"https://youtu.be/{video_id}{f'?t={start}' if start else ''}"
+        if not youtube.is_linked(self.s.host):
+            self.gtv.launch("https://www.youtube.com/watch?v=" + video_id)
+            return (
+                f"Opened YouTube for {link}, but videos only start reliably once YouTube is linked: on "
+                "the projector open YouTube > Settings > Link with TV code, then run "
+                "`samsung-tv --gtv <ip> youtube-link <code>`."
+            )
+        just_opened = self.dial.status("YouTube") != "running"
+        if just_opened:
+            self._launch("YouTube")
+        began, picked = time.monotonic(), False
+        while not youtube.is_online(self.s.host) and time.monotonic() - began < 45:
+            if just_opened and not picked and time.monotonic() - began >= self.PICK_ACCOUNT_AFTER:
+                picked = True  # "Who's watching?" on a fresh start: OK picks the highlighted account
+                self.press(["KEY_ENTER"])
+            time.sleep(2)
+        if just_opened:
+            time.sleep(8)
+        if youtube.play(self.s.host, video_id, start):
+            return f"Playing {link} on the projector."
+        return f"Sent {link} to the projector's YouTube app."

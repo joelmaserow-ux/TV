@@ -41,6 +41,8 @@ def _gtv(args) -> str:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="samsung-tv", description="Control a Samsung H-series TV.")
     p.add_argument("-v", "--verbose", action="store_true", help="print protocol debug logs")
+    p.add_argument("--gtv", metavar="IP",
+                   help="run netflix/youtube/key/app commands on a Google TV (e.g. the projector) instead")
     p.add_argument("--host", help="TV IP address (default: $SAMSUNG_TV_HOST or 192.168.1.106)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("diagnose", help="probe the TV and test pairing")
@@ -100,6 +102,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.host:
         os.environ["SAMSUNG_TV_HOST"] = args.host
     tv = TV(Settings.from_env())
+    if args.gtv:
+        from .googletv import GoogleTVDevice
+
+        supported = {"netflix", "netflix-search", "netflix-episode", "youtube", "youtube-link", "key", "app"}
+        if args.cmd not in supported:
+            print(f"Error: with --gtv, use one of: {', '.join(sorted(supported))} (or the gtv command).",
+                  file=sys.stderr)
+            return 1
+        tv = GoogleTVDevice(args.gtv)
 
     try:
         match args.cmd:

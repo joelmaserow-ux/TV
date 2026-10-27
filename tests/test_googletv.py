@@ -117,3 +117,47 @@ def test_launch_without_app_reporting_just_sends(gtv, monkeypatch):
     monkeypatch.setattr(googletv.asyncio, "sleep", _instant)
     assert "doesn't report" in g.launch("Stan")
     assert fake.sent == [("launch", "https://play.stan.com.au")]
+
+
+class FakeGTV:
+    """Foreground app follows launches and the Back -> Right -> OK exit."""
+
+    def __init__(self):
+        self.app = "com.google.android.apps.tv.launcherx"
+        self.keys = []
+        self.launched = []
+
+    def press(self, keys, delay=0.3):
+        self.keys += keys
+        if self.keys[-3:] == ["KEY_RETURN", "KEY_RIGHT", "KEY_ENTER"]:
+            self.app = "com.google.android.apps.tv.launcherx"
+        return keys
+
+    def launch(self, name):
+        self.launched.append(name)
+        if name.lower() == "netflix":
+            self.app = "com.netflix.ninja"
+        return f"Opened {name}."
+
+    def foreground(self):
+        return self.app
+
+
+def test_netflix_on_google_tv_uses_its_own_exit_and_search_route(tmp_path, monkeypatch):
+    from samsung_tv_mcp import netflix
+
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(netflix.time, "sleep", lambda s: None)
+    dev = googletv.GoogleTVDevice("10.0.0.7")
+    fake = FakeGTV()
+    dev.gtv = fake
+    dev.dial = googletv._AppState(fake)
+    msg = netflix.watch(dev, "Ben", "rick")
+    assert "Ben" in msg
+    k = fake.keys
+    assert k[:3] == ["KEY_RETURN", "KEY_RIGHT", "KEY_ENTER"]  # quit Netflix properly
+    assert k[3:3 + 8] == netflix.profile_keys(netflix.DEFAULT_PROFILES, "Ben")
+    after = k[3 + 8:]
+    assert after[:3] == ["KEY_UP", "KEY_LEFT", "KEY_ENTER"]  # the projector's route to Search
+    assert after[3:3 + len(netflix.type_keys("rick"))] == netflix.type_keys("rick")
+    assert fake.launched == ["Netflix", "Netflix"]

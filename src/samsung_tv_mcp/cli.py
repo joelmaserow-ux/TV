@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     ep.add_argument("season", type=int)
     ep.add_argument("episode", type=int)
     sub.add_parser("episodes", help="list a series' seasons and episodes (TVmaze)").add_argument("show")
+    sub.add_parser("netflix-close", help="fully quit Netflix so it reopens on the profile screen")
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     gtv = sub.add_parser("gtv", help="control a Google TV / Android TV (e.g. the projector)")
     gtv.add_argument("--ip", default=os.environ.get("GOOGLE_TV_HOST"), help="its IP address ($GOOGLE_TV_HOST)")
@@ -105,7 +106,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.gtv:
         from .googletv import GoogleTVDevice
 
-        supported = {"netflix", "netflix-search", "netflix-episode", "youtube", "youtube-link", "key", "app"}
+        supported = {"netflix", "netflix-close", "netflix-search", "netflix-episode", "youtube", "youtube-link",
+                     "key", "app"}
         if args.cmd not in supported:
             print(f"Error: with --gtv, use one of: {', '.join(sorted(supported))} (or the gtv command).",
                   file=sys.stderr)
@@ -162,6 +164,9 @@ def main(argv: list[str] | None = None) -> int:
                 from .episodes import seasons
                 data = seasons(args.show)
                 out = "\n".join(f"Season {s['number']}: {len(s['episodes'])} episodes" for s in data["seasons"])
+            case "netflix-close":
+                from . import netflix
+                out = netflix.close(tv)
             case "netflix-profiles":
                 from . import netflix
                 out = "Profiles, top to bottom: " + ", ".join(netflix.set_profiles(tv.s.host, args.names))

@@ -129,8 +129,8 @@ class FakeGTV:
 
     def press(self, keys, delay=0.3):
         self.keys += keys
-        if self.keys[-3:] == ["KEY_RETURN", "KEY_RIGHT", "KEY_ENTER"]:
-            self.app = "com.google.android.apps.tv.launcherx"
+        if keys == ["KEY_MENU"]:
+            self.app = "com.android.tv.settings"
         return keys
 
     def launch(self, name):
@@ -155,9 +155,12 @@ def test_netflix_on_google_tv_uses_its_own_exit_and_search_route(tmp_path, monke
     msg = netflix.watch(dev, "Ben", "rick")
     assert "Ben" in msg
     k = fake.keys
-    assert k[:3] == ["KEY_RETURN", "KEY_RIGHT", "KEY_ENTER"]  # quit Netflix properly
-    assert k[3:3 + 8] == netflix.profile_keys(netflix.DEFAULT_PROFILES, "Ben")
-    after = k[3 + 8:]
+    force_stop = (["KEY_MENU", "KEY_ENTER"] + ["KEY_DOWN"] * 4 + ["KEY_RIGHT", "KEY_DOWN", "KEY_ENTER"]
+                  + ["KEY_DOWN"] * 8 + ["KEY_RIGHT", "KEY_DOWN", "KEY_ENTER", "KEY_ENTER"])
+    n = len(force_stop)
+    assert k[:n] == force_stop  # force-stop Netflix from Settings
+    assert k[n:n + 8] == netflix.profile_keys(netflix.DEFAULT_PROFILES, "Ben")
+    after = k[n + 8:]
     assert after[:3] == ["KEY_UP", "KEY_LEFT", "KEY_ENTER"]  # the projector's route to Search
     assert after[3:3 + len(netflix.type_keys("rick"))] == netflix.type_keys("rick")
     assert fake.launched == ["Netflix", "Netflix"]

@@ -89,7 +89,8 @@ def profile_keys(profiles: list[str], name: str) -> list[str]:
 # results, episodes) is the same Netflix layout. Devices can override via `netflix_layout`.
 SAMSUNG_LAYOUT = {
     # Exit asks "Are you sure you want to exit Netflix?": Right is Yes.
-    "exit": ["KEY_EXIT", "KEY_RIGHT", "KEY_ENTER"],
+    # Each step is (presses, seconds to wait after them).
+    "exit": [(["KEY_EXIT"], 1.5), (["KEY_RIGHT"], 0.5), (["KEY_ENTER"], 0)],
     "to_search": ["KEY_LEFT", "KEY_UP", "KEY_ENTER"],
 }
 
@@ -127,14 +128,15 @@ def _fully_exit(tv, wait: float, attempts: int = 3) -> None:
     # Only trust the TV's running/stopped report for Netflix if it ever says "running".
     reports_state = _wait_for_state(tv, "running", 30)
     time.sleep(wait)
-    first, *confirm = layout(tv)["exit"]
+    steps = layout(tv)["exit"]
     for _ in range(attempts):
-        tv.press([first])
-        time.sleep(1.5)  # let the "Are you sure?" dialog appear
-        for i, key in enumerate(confirm):
-            if i:
-                time.sleep(0.5)
-            tv.press([key])
+        for keys, pause in steps:
+            for i, key in enumerate(keys):
+                if i:
+                    time.sleep(0.6)
+                tv.press([key])
+            if pause:
+                time.sleep(pause)
         if not reports_state:
             time.sleep(3)
             return
@@ -146,6 +148,12 @@ def _fully_exit(tv, wait: float, attempts: int = 3) -> None:
         "Netflix didn't quit, so it can't be opened on the profile screen. Exit Netflix with the "
         "TV remote (Exit, then Yes) and try again."
     )
+
+
+def close(tv) -> str:
+    """Fully quit Netflix (so it next opens on "Choose a Profile")."""
+    _fully_exit(tv, float(load(tv.s.host)["startup_wait"]))
+    return "Closed Netflix."
 
 
 def open_as(tv, name: str) -> str:

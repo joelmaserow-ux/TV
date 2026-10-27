@@ -311,8 +311,18 @@ class GoogleTVDevice:
     routines: same Netflix screens, just a different route to Search and a Back-based exit."""
 
     netflix_layout = {
-        # Back on Netflix's home asks whether to exit; Right is Yes.
-        "exit": ["KEY_RETURN", "KEY_RIGHT", "KEY_ENTER"],
+        # Back doesn't really quit Netflix here, so force-stop it from the Settings panel:
+        # Settings, OK, Down 4, Right, Down, OK (Netflix's app info), Down 8, Right, Down,
+        # OK (Force stop), OK (confirm). Each step is (presses, seconds to wait after them).
+        "exit": [
+            (["KEY_MENU"], 2.0),
+            (["KEY_ENTER"], 2.0),
+            (["KEY_DOWN"] * 4 + ["KEY_RIGHT", "KEY_DOWN"], 0.5),
+            (["KEY_ENTER"], 2.5),
+            (["KEY_DOWN"] * 8 + ["KEY_RIGHT", "KEY_DOWN"], 0.5),
+            (["KEY_ENTER"], 1.5),
+            (["KEY_ENTER"], 2.0),
+        ],
         # After picking a profile: Up, Left, OK lands on "a" of the search keyboard.
         "to_search": ["KEY_UP", "KEY_LEFT", "KEY_ENTER"],
     }

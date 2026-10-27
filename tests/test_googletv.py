@@ -66,10 +66,13 @@ def test_commands(gtv):
     assert g.status()["device"] == "TOPTRO TP3"
 
 
-def test_set_volume_steps_on_device_scale(gtv):
+def test_set_volume_uses_the_device_scale(gtv):
     g, fake = gtv
-    g.set_volume(75)  # 75% of max 20 = 15, from 10 -> 5 steps up
-    assert fake.sent == [("key", "VOLUME_UP")] * 5
+    fake.volume_info = {"level": 2, "max": 15, "muted": False}
+    assert g.set_volume(10) == "Volume set to 10 (of 15)."
+    assert fake.sent == [("key", "VOLUME_UP")] * 8
+    with pytest.raises(ValueError, match="0 to 15"):
+        g.set_volume(20)
 
 
 def test_unpaired_is_explained(tmp_path, monkeypatch):

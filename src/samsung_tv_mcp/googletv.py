@@ -175,19 +175,20 @@ class GoogleTV:
         return target
 
     def set_volume(self, level: int) -> str:
-        """Step the volume to `level` (0-100), using the device's own volume scale."""
+        """Step the volume to `level` on the device's own scale (e.g. 0-15 on the TP3)."""
         info = self.status()
-        current, top = info.get("volume"), info.get("volume_max") or 100
+        current, top = info.get("volume"), info.get("volume_max")
         if current is None:
             raise TVError(
                 "This Google TV doesn't report its volume (common when it controls the projector's "
                 "volume over HDMI). Use volume up/down instead: samsung-tv gtv key volup volup"
             )
-        target = round(max(0, min(100, level)) * top / 100)
-        steps = target - current
+        if top and not 0 <= level <= top:
+            raise ValueError(f"This device's volume goes from 0 to {top}.")
+        steps = level - current
         if steps:
-            self.press(["KEY_VOLUP" if steps > 0 else "KEY_VOLDOWN"] * min(abs(steps), 60), delay=0.12)
-        return f"Volume set to {level}."
+            self.press(["KEY_VOLUP" if steps > 0 else "KEY_VOLDOWN"] * min(abs(steps), 100), delay=0.15)
+        return f"Volume set to {level}" + (f" (of {top})." if top else ".")
 
     def status(self) -> dict:
         async def get():

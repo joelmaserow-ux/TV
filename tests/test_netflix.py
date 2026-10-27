@@ -239,3 +239,14 @@ def test_watch_play_presses_ok_on_show_page(monkeypatch):
     presses = [e[1][0] for e in tv.events if e[0] == "press"]
     # search ends ... Right, Right, OK (open first result), then one more OK on the page.
     assert presses[-4:] == ["KEY_RIGHT", "KEY_RIGHT", "KEY_ENTER", "KEY_ENTER"]
+
+
+def test_to_search_steps_wait_between_presses(monkeypatch):
+    slept = []
+    monkeypatch.setattr(netflix.time, "sleep", slept.append)
+    tv = FakeTV()
+    tv.netflix_layout = {"to_search": [(["KEY_UP"], 1.0), (["KEY_LEFT"], 2.0), (["KEY_ENTER"], 0.8)]}
+    netflix.search(tv, "a")
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    assert presses[:3] == ["KEY_UP", "KEY_LEFT", "KEY_ENTER"]
+    assert slept[:3] == [1.0, 2.0, 0.8]

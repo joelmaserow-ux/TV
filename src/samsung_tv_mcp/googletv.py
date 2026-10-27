@@ -323,8 +323,9 @@ class GoogleTVDevice:
             (["KEY_ENTER"], 1.5),
             (["KEY_ENTER"], 2.0),
         ],
-        # After picking a profile: Up, Left, OK lands on "a" of the search keyboard.
-        "to_search": ["KEY_UP", "KEY_LEFT", "KEY_ENTER"],
+        # After picking a profile: Up, Left, OK lands on "a" of the search keyboard. Left
+        # slides the side menu open, and an OK sent before it settles is ignored, so wait.
+        "to_search": [(["KEY_UP"], 1.0), (["KEY_LEFT"], 2.0), (["KEY_ENTER"], 0.8)],
     }
     PICK_ACCOUNT_AFTER = 12.0
 

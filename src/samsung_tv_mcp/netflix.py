@@ -91,7 +91,8 @@ SAMSUNG_LAYOUT = {
     # Exit asks "Are you sure you want to exit Netflix?": Right is Yes.
     # Each step is (presses, seconds to wait after them).
     "exit": [(["KEY_EXIT"], 1.5), (["KEY_RIGHT"], 0.5), (["KEY_ENTER"], 0)],
-    "to_search": ["KEY_LEFT", "KEY_UP", "KEY_ENTER"],
+    # From the home screen to "a" on the search keyboard: (presses, seconds to wait after them).
+    "to_search": [(["KEY_LEFT"], 0.8), (["KEY_UP"], 0.8), (["KEY_ENTER"], 0.8)],
 }
 
 
@@ -249,7 +250,8 @@ def search(tv, title: str) -> str:
     typed = normalize_title(title)
     if not typed:
         raise ValueError("Type the name of a show or movie.")
-    _press_slowly(tv, layout(tv)["to_search"], 0.8)
+    for keys, pause in layout(tv)["to_search"]:
+        _press_slowly(tv, keys, pause)
     time.sleep(float(data.get("keyboard_wait", 4)))
     keys, end = _type(typed)
     _press_slowly(tv, keys, float(data.get("type_gap", 0.4)))

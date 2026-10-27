@@ -203,16 +203,20 @@ def _moves(start: tuple[int, int], end: tuple[int, int]) -> list[str]:
     return horizontal + vertical
 
 
-def _type(text: str) -> tuple[list[str], tuple[int, int]]:
-    """Presses that type `text` from "a", and where the highlight ends up."""
+def _type(text: str, space_landing: tuple[int, int] = (0, 0)) -> tuple[list[str], tuple[int, int]]:
+    """Presses that type `text` from "a", and where the highlight ends up.
+
+    `space_landing` is the key Down lands on after pressing Space ("a" on the Samsung, "b" on
+    the projector's Netflix).
+    """
     pos = (0, 0)
     keys: list[str] = []
     for ch in normalize_title(text):
         if ch == " ":
-            # Space is a wide key above a/b/c. Go up from the "a" column so that coming back
-            # down lands on "a" whether the TV remembers the column or snaps to the left.
+            # Space is a wide key above a/b/c: go up onto it from the "a" column, press it,
+            # come back down, and carry on from wherever this device puts the highlight.
             keys += _moves(pos, (0, 0)) + ["KEY_UP", "KEY_ENTER", "KEY_DOWN"]
-            pos = (0, 0)
+            pos = space_landing
         else:
             target = _find(ch)
             keys += _moves(pos, target) + ["KEY_ENTER"]
@@ -220,9 +224,9 @@ def _type(text: str) -> tuple[list[str], tuple[int, int]]:
     return keys, pos
 
 
-def type_keys(text: str) -> list[str]:
+def type_keys(text: str, space_landing: tuple[int, int] = (0, 0)) -> list[str]:
     """Presses that type `text`, starting with the highlight on "a"."""
-    return _type(text)[0]
+    return _type(text, space_landing)[0]
 
 
 def to_first_result(pos: tuple[int, int]) -> list[str]:
@@ -253,7 +257,7 @@ def search(tv, title: str) -> str:
     for keys, pause in layout(tv)["to_search"]:
         _press_slowly(tv, keys, pause)
     time.sleep(float(data.get("keyboard_wait", 4)))
-    keys, end = _type(typed)
+    keys, end = _type(typed, tuple(layout(tv).get("space_landing", (0, 0))))
     _press_slowly(tv, keys, float(data.get("type_gap", 0.4)))
     time.sleep(2)  # let the results update after the last letter
     _press_slowly(tv, to_first_result(end), 0.6)

@@ -250,3 +250,23 @@ def test_to_search_steps_wait_between_presses(monkeypatch):
     presses = [e[1][0] for e in tv.events if e[0] == "press"]
     assert presses[:3] == ["KEY_UP", "KEY_LEFT", "KEY_ENTER"]
     assert slept[:3] == [1.0, 2.0, 0.8]
+
+
+@pytest.mark.parametrize("landing", [(0, 0), (0, 1)])
+def test_typing_after_space_counts_from_where_down_lands(landing):
+    # Model a keyboard where Down from the Space bar lands on `landing` ("a" or "b").
+    rows = [" "] + netflix.KEYBOARD
+    r, c, typed = 1, 0, ""
+    for key in netflix.type_keys("rick and morty", landing):
+        if key == "KEY_RIGHT": c += 1
+        elif key == "KEY_LEFT": c -= 1
+        elif key == "KEY_UP": r -= 1
+        elif key == "KEY_DOWN":
+            if r == 0:
+                r, c = 1 + landing[0], landing[1]
+            else:
+                r += 1
+        else:
+            typed += " " if r == 0 else rows[r][c]
+        assert 0 <= r <= 6 and 0 <= c <= 5
+    assert typed == "rick and morty"

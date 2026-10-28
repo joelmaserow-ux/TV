@@ -197,6 +197,25 @@ class GoogleTV:
             proto = remote._remote_message_protocol
             if proto is None:
                 raise TVUnreachable(f"Lost the connection to the Google TV at {self.host}.")
+            if not getattr(proto, "keyboard_seen", False):
+                # Connected after the keyboard opened, so we missed its edit number and a first
+                # edit would be dropped. An empty edit makes the device send the number back.
+                for _ in range(10):
+                    await asyncio.sleep(0.1)
+                    if getattr(proto, "keyboard_seen", False):
+                        break
+                else:
+                    primer = RemoteMessage()
+                    primer.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
+                        ime_counter=getattr(proto, "ime_counter", 0),
+                        field_counter=getattr(proto, "ime_field_counter", 0),
+                        edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=-1, end=-1, value=""))],
+                    ))
+                    proto._send_message(primer)
+                    for _ in range(20):
+                        await asyncio.sleep(0.1)
+                        if getattr(proto, "keyboard_seen", False):
+                            break
             counter = getattr(proto, "ime_counter", 0)
             field = counter if field_from_counter else getattr(proto, "ime_field_counter", 0)
             msg = RemoteMessage()
@@ -545,6 +564,25 @@ class Projector(GoogleTVDevice):
             proto = remote._remote_message_protocol
             if proto is None:
                 raise TVUnreachable(f"Lost the connection to the Google TV at {self.host}.")
+            if not getattr(proto, "keyboard_seen", False):
+                # Connected after the keyboard opened, so we missed its edit number and a first
+                # edit would be dropped. An empty edit makes the device send the number back.
+                for _ in range(10):
+                    await asyncio.sleep(0.1)
+                    if getattr(proto, "keyboard_seen", False):
+                        break
+                else:
+                    primer = RemoteMessage()
+                    primer.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
+                        ime_counter=getattr(proto, "ime_counter", 0),
+                        field_counter=getattr(proto, "ime_field_counter", 0),
+                        edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=-1, end=-1, value=""))],
+                    ))
+                    proto._send_message(primer)
+                    for _ in range(20):
+                        await asyncio.sleep(0.1)
+                        if getattr(proto, "keyboard_seen", False):
+                            break
             counter = getattr(proto, "ime_counter", 0)
             field = counter if field_from_counter else getattr(proto, "ime_field_counter", 0)
             msg = RemoteMessage()

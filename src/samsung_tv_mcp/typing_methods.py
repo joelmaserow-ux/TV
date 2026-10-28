@@ -130,8 +130,8 @@ def _cursor(kind: str, sent: str, box: str) -> int:
 
 def run(device, ask=input, say=print) -> str | None:
     """Try each method on the projector and keep the first that types "hi" correctly."""
-    say("Typing test. On the projector, open YouTube and select its search box so the keyboard shows.")
-    ask("Press Enter when the projector's search keyboard is showing.")
+    say("Typing test.")
+    _open_keyboard(device, ask, say)
     for i, name in enumerate(METHODS, 1):
         ask(f"\n[{i}/{len(METHODS)}] Clear the projector's search box (delete everything with its own remote),"
             " then press Enter here.")
@@ -161,7 +161,8 @@ def run_delete(device, ask=input, say=print) -> str | None:
     if METHODS[method][0] == "full":
         say("It sends the whole box, so deleting and Clear work the same way as typing. Nothing to test.")
         return None
-    say("Deleting test. On the projector, open YouTube and select its search box so the keyboard shows.")
+    say("Deleting test.")
+    _open_keyboard(device, ask, say)
     ask("Clear the projector's search box with its own remote, then press Enter here.")
     send(device, method, "", "h")
     time.sleep(1.0)
@@ -189,6 +190,16 @@ def run_delete(device, ask=input, say=print) -> str | None:
         return how
     say(f"No way of deleting worked. Typing: {method}. Tell Claude: 'deleting test: none worked'.")
     return None
+
+
+def _open_keyboard(device, ask, say) -> None:
+    """Connect first, then have the keyboard opened, so its announcement reaches us."""
+    try:
+        device.gtv.status()
+    except Exception as exc:  # shown, but the test can still try
+        say(f"(Couldn't reach the projector yet: {exc})")
+    ask("On the projector, open YouTube's search. If its keyboard is already showing, press Back "
+        "and select the search box again so the keyboard pops up fresh. Then press Enter here.")
 
 
 def _yes(ask, question: str) -> bool:

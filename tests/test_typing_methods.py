@@ -5,6 +5,9 @@ class FakeGtv:
     def __init__(self):
         self.edits = []
 
+    def status(self):
+        return {"on": True}
+
     def ime_edit(self, value, start=None, end=None, counter_offset=0, field_from_counter=False):
         self.edits.append((value, start, counter_offset, field_from_counter))
         return True

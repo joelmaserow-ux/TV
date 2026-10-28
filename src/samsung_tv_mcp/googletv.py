@@ -172,6 +172,13 @@ class GoogleTV:
         self._run(go())
         return codes
 
+    def box_text(self) -> str | None:
+        """What the device last said its open text box reads (None if it hasn't said)."""
+        proto = getattr(self._remote, "_remote_message_protocol", None) if self._remote else None
+        if proto is None or not getattr(proto, "keyboard_seen", False):
+            return None
+        return getattr(proto, "ime_value", None)
+
     def set_text(self, value: str) -> bool:
         """Send `value` to the open text box (how the box takes it depends on the device)."""
         return self.ime_edit(value)
@@ -226,7 +233,7 @@ class GoogleTV:
             proto._send_message(msg)
             print(f"  sent to projector: {value!r} start={start} end={end} edit={counter + counter_offset} "
                   f"box={field}", flush=True)
-            for _ in range(10):  # until the device has counted this change
+            for _ in range(40):  # until the device has counted this change (up to 2 s)
                 if getattr(proto, "ime_counter", 0) != counter:
                     break
                 await asyncio.sleep(0.05)
@@ -539,6 +546,13 @@ class Projector(GoogleTVDevice):
         self.press(["KEY_MUTE"])
         return "Toggled mute."
 
+    def box_text(self) -> str | None:
+        """What the device last said its open text box reads (None if it hasn't said)."""
+        proto = getattr(self._remote, "_remote_message_protocol", None) if self._remote else None
+        if proto is None or not getattr(proto, "keyboard_seen", False):
+            return None
+        return getattr(proto, "ime_value", None)
+
     def set_text(self, value: str) -> bool:
         """Send `value` to the open text box (how the box takes it depends on the device)."""
         return self.ime_edit(value)
@@ -593,7 +607,7 @@ class Projector(GoogleTVDevice):
             proto._send_message(msg)
             print(f"  sent to projector: {value!r} start={start} end={end} edit={counter + counter_offset} "
                   f"box={field}", flush=True)
-            for _ in range(10):  # until the device has counted this change
+            for _ in range(40):  # until the device has counted this change (up to 2 s)
                 if getattr(proto, "ime_counter", 0) != counter:
                     break
                 await asyncio.sleep(0.05)
@@ -613,7 +627,11 @@ class Projector(GoogleTVDevice):
         text = text[:200]
         method = typing_methods.load(self.s.host)
         delete = typing_methods.load_delete(self.s.host)
-        if not typing_methods.send(self, method, self._typed, text, delete):
+        # Work from what the projector says its box reads, so a box changed or cleared with the
+        # projector's own remote (or a new search box) doesn't throw the letters off.
+        box = self.gtv.box_text() if hasattr(self.gtv, "box_text") else None
+        before = box if box is not None else self._typed
+        if not typing_methods.send(self, method, before, text, delete):
             raise TVError(
                 "The projector hasn't opened its keyboard for the remote yet. Select the search "
                 "box on the projector (so its keyboard shows), then type again."

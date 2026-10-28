@@ -67,3 +67,14 @@ def test_remove_ways():
     tm.remove(d, "range", "hello", "he")
     tm.remove(d, "box-last", "hi", "h")
     assert d.gtv.edits == [("", 2, 0, False), ("h", 0, 0, False)]
+
+
+def test_fast_test_types_through_the_remote_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(tm.time, "sleep", lambda s: None)
+    d = FakeDevice()
+    seen = []
+    d.type_text = seen.append
+    answers = iter(["", "", "y", "y", "y"])
+    assert tm.run_fast(d, ask=lambda q: next(answers), say=lambda m: None) is True
+    assert seen[:3] == ["m", "mr", "mr "] and seen[7] == "mr beast" and seen[-2:] == ["mr bea", ""]

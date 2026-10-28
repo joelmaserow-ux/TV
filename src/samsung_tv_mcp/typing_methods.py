@@ -192,6 +192,29 @@ def run_delete(device, ask=input, say=print) -> str | None:
     return None
 
 
+def run_fast(device, ask=input, say=print) -> bool:
+    """Type the way a phone does, letter by letter with no pauses, through the remote's own path."""
+    say(f"Fast typing test (typing: {load(device.s.host)}, deleting: {load_delete(device.s.host)}).")
+    _open_keyboard(device, ask, say)
+    ask("Clear the projector's search box with its own remote, then press Enter here.")
+    device._typed = ""
+    text = ""
+    for letter in "mr beast":
+        text += letter
+        device.type_text(text)
+    time.sleep(1.5)
+    typed = _yes(ask, "Does the projector's box read exactly  mr beast ?")
+    device.type_text("mr bea")
+    time.sleep(1.5)
+    deleted = _yes(ask, "Did the last two letters go (box reads  mr bea )?")
+    device.type_text("")
+    time.sleep(1.5)
+    cleared = _yes(ask, "Is the box empty now?")
+    say("Fast test: typing " + ("OK" if typed else "WRONG") + ", deleting " + ("OK" if deleted else "WRONG")
+        + ", clear " + ("OK" if cleared else "WRONG") + ". Tell Claude this line.")
+    return typed and deleted and cleared
+
+
 def _open_keyboard(device, ask, say) -> None:
     """Connect first, then have the keyboard opened, so its announcement reaches us."""
     try:

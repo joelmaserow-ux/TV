@@ -173,8 +173,10 @@ class GoogleTV:
         return codes
 
     def set_text(self, value: str) -> bool:
-        """Insert `value` at the cursor of the open text box, like typing on the Google TV app.
+        """Make the open text box read `value`, like typing on the Google TV app.
 
+        Each change quotes the device's latest edit counter, then waits for the device to
+        count it, so quick changes don't get merged with an older state of the box.
         Returns whether the device has said a keyboard is open.
         """
         from androidtvremote2.remotemessage_pb2 import (
@@ -195,9 +197,14 @@ class GoogleTV:
                 field_counter=getattr(proto, "ime_field_counter", 0),
                 edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=end, end=end, value=value))],
             ))
+            counter = getattr(proto, "ime_counter", 0)
             proto._send_message(msg)
             print(f"  sent to projector: {value!r} (box {getattr(proto, 'ime_field_counter', 0)}, "
-                  f"edit {getattr(proto, 'ime_counter', 0)})", flush=True)
+                  f"edit {counter})", flush=True)
+            for _ in range(10):  # until the device has counted this change
+                if getattr(proto, "ime_counter", 0) != counter:
+                    break
+                await asyncio.sleep(0.05)
             return bool(getattr(proto, "keyboard_seen", False))
 
         return self._run(go())
@@ -328,8 +335,9 @@ def _patch_keyboard_tracking() -> None:
             return
         if msg.HasField("remote_ime_show_request"):
             box = msg.remote_ime_show_request.remote_text_field_status
-            if box.counter_field:
-                self.ime_field_counter = box.counter_field
+            # This number goes up with every change to the box: it's the edit counter our next
+            # change has to quote, or the device merges it with an older state of the box.
+            self.ime_counter = box.counter_field
             self.ime_value = box.value
             print(f"  projector: keyboard open, box {box.counter_field}, it reads {box.value!r}", flush=True)
             self.keyboard_seen = True
@@ -507,8 +515,10 @@ class Projector(GoogleTVDevice):
         return "Toggled mute."
 
     def set_text(self, value: str) -> bool:
-        """Insert `value` at the cursor of the open text box, like typing on the Google TV app.
+        """Make the open text box read `value`, like typing on the Google TV app.
 
+        Each change quotes the device's latest edit counter, then waits for the device to
+        count it, so quick changes don't get merged with an older state of the box.
         Returns whether the device has said a keyboard is open.
         """
         from androidtvremote2.remotemessage_pb2 import (
@@ -529,40 +539,29 @@ class Projector(GoogleTVDevice):
                 field_counter=getattr(proto, "ime_field_counter", 0),
                 edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=end, end=end, value=value))],
             ))
+            counter = getattr(proto, "ime_counter", 0)
             proto._send_message(msg)
             print(f"  sent to projector: {value!r} (box {getattr(proto, 'ime_field_counter', 0)}, "
-                  f"edit {getattr(proto, 'ime_counter', 0)})", flush=True)
+                  f"edit {counter})", flush=True)
+            for _ in range(10):  # until the device has counted this change
+                if getattr(proto, "ime_counter", 0) != counter:
+                    break
+                await asyncio.sleep(0.05)
             return bool(getattr(proto, "keyboard_seen", False))
 
         return self._run(go())
 
-    _typed = ""  # what we've typed into the projector's open box so far
-
     def type_text(self, text: str) -> str:
         """Make the projector's open text box read `text`, sent live as the phone's box changes.
 
-        The device only inserts text at its cursor, so send just the difference: Delete for
-        letters that went away, then the new letters. (The box's number changes after every
-        edit, so it can't tell us when a different box opened; Clear starts afresh.)
+        The whole box goes each time, quoting the projector's latest edit counter, which is how
+        the Google TV app types (an empty box clears it).
         """
-        text = text[:200]
-        old = self._typed
-        same = 0
-        while same < min(len(old), len(text)) and old[same] == text[same]:
-            same += 1
-        deletes = len(old) - same
-        if deletes:
-            self.press(["KEY_BACKSPACE"] * deletes, delay=0.05)
-        added = text[same:]
-        self._typed = old[:same]
-        for letter in added:  # one letter per message, like pressing keys on its keyboard
-            if not self.gtv.set_text(letter):
-                raise TVError(
-                    "The projector hasn't opened its keyboard for the remote yet. Select the search "
-                    "box on the projector (so its keyboard shows), then type again."
-                )
-            self._typed += letter
-        self._typed = text
+        if not self.gtv.set_text(text[:200]):
+            raise TVError(
+                "The projector hasn't opened its keyboard for the remote yet. Select the search "
+                "box on the projector (so its keyboard shows), then type again."
+            )
         return ""
 
     def power_off(self) -> str:

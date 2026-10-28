@@ -47,11 +47,11 @@ Done. Next (only the parts for what you have):
   Projector (Google TV):
     1. Pair (projector on; a code appears on it):  samsung-tv gtv --ip 192.168.86.177 pair
     2. Link YouTube on it (YouTube > Settings > Link with TV code on the projector):
-                                                   samsung-tv --gtv 192.168.86.177 youtube-link 123 456 789 012
+                                                   samsung-tv --gtv 192.168.86.177 youtube-link <the 12-digit code on screen>
     3. Start the remote with it (remembered):      tv-remote --projector 192.168.86.177
   Samsung TV:
     1. Pair (TV on, a PIN appears on screen):      samsung-tv pair
-    2. Link YouTube:                               samsung-tv youtube-link 123 456 789 012
+    2. Link YouTube:                               samsung-tv youtube-link <the 12-digit code on screen>
   Then open  http://localhost:8765  in Chrome on this phone (Add to Home screen).
   After the first time, just run:  tv-remote
 

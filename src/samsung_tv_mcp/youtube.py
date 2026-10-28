@@ -87,8 +87,9 @@ async def _link(host: str, code: str) -> str:
     async with _api() as api:
         try:
             ok = await api.pair(code)
-        except (KeyError, ValueError) as exc:  # unknown/expired codes come back without a "screen"
-            raise TVError("YouTube didn't accept that code. Get a fresh one on the TV and try again.") from exc
+        except Exception as exc:  # unknown/expired codes: no "screen", or a 404 page instead of JSON
+            raise TVError("YouTube didn't accept that code. Use the 12-digit code showing on the screen under "
+                          "YouTube > Settings > Link with TV code (it expires after a few minutes).") from exc
         if not ok:
             raise TVError("YouTube didn't accept that code. Get a fresh one on the TV and try again.")
         path = _auth_path(host)

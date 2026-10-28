@@ -42,7 +42,7 @@ This is the fastest route and what was used on the UA55H6300. The longer manual 
    - On the TV, open YouTube and **sign in** (code at youtube.com/activate). As a guest, the app
      stops on an account picker when opened and ignores casts.
    - In YouTube on the TV, open **Settings → Link with TV code** and run
-     `uvx --from $tv samsung-tv youtube-link 123 456 789 012` with the code shown.
+     `uvx --from $tv samsung-tv youtube-link <code>` with the 12-digit code shown.
 5. **Test:** `uvx --from $tv samsung-tv youtube "https://youtu.be/aqz-KE-bpKQ"`.
 6. **Add to Claude Desktop:** run `uvx --from $tv samsung-tv install-claude` (it backs up and merges your config), then fully restart Claude Desktop. Or edit it by hand (**Settings → Developer → Edit Config**):
    ```json
@@ -361,7 +361,7 @@ Set these in the `env` block of the MCP config (or export them before running `s
   `mute` still work through remote keys.
 - **YouTube opens but says "This video is unavailable"**: the TV's YouTube app can't take a video
   passed at launch. Link it once: on the TV open **YouTube → Settings → Link with TV code** (older
-  apps: **Pair device**), then run `samsung-tv youtube-link 123 456 789 012` with the code shown, or
+  apps: **Pair device**), then run `samsung-tv youtube-link <code>` with the 12-digit code shown, or
   ask Claude to link it. Afterwards `play_youtube` casts the way the phone app does.
 - **YouTube goes back to "choose an account" / sign-in**: sign in to YouTube on the TV. In guest
   mode the app sits on the account picker when opened and drops casts.

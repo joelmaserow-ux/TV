@@ -420,7 +420,7 @@ def serve(port: int = 8765, pin: str | None = None, projector: str | None = None
     app = RemoteApp(TV(settings), pin, device)
     threading.Thread(target=app.discover_apps, daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(app))
-    print("Family TV remote is running (typing fix 5).\n")
+    print("Family TV remote is running (typing fix 6).\n")
     print(f"  Open on any phone or laptop on your Wi-Fi:  http://{lan_ip(settings.host)}:{port}")
     print(f"  PIN: {pin}")
     print(f"  Projector: {projector_ip}" if projector_ip else "  Projector: not set up (add --projector <IP>)")

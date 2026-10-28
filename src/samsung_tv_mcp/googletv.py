@@ -551,17 +551,30 @@ class Projector(GoogleTVDevice):
 
         return self._run(go())
 
+    _typed = ""  # what we've typed into the projector's open box so far
+
     def type_text(self, text: str) -> str:
         """Make the projector's open text box read `text`, sent live as the phone's box changes.
 
-        The whole box goes each time, quoting the projector's latest edit counter, which is how
-        the Google TV app types (an empty box clears it).
+        The projector adds whatever text it's sent at its cursor, so send only the new letters
+        (each quoting its latest edit counter, or it repeats an old letter) and Delete presses
+        for removed ones.
         """
-        if not self.gtv.set_text(text[:200]):
-            raise TVError(
-                "The projector hasn't opened its keyboard for the remote yet. Select the search "
-                "box on the projector (so its keyboard shows), then type again."
-            )
+        text = text[:200]
+        old = self._typed
+        same = 0
+        while same < min(len(old), len(text)) and old[same] == text[same]:
+            same += 1
+        if len(old) > same:
+            self.press(["KEY_BACKSPACE"] * (len(old) - same), delay=0.05)
+        self._typed = old[:same]
+        for letter in text[same:]:
+            if not self.gtv.set_text(letter):
+                raise TVError(
+                    "The projector hasn't opened its keyboard for the remote yet. Select the search "
+                    "box on the projector (so its keyboard shows), then type again."
+                )
+            self._typed += letter
         return ""
 
     def power_off(self) -> str:

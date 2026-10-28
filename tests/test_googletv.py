@@ -225,6 +225,54 @@ def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
     loop.close()
 
 
+def test_projector_sends_only_new_letters():
+    class Gtv:
+        def __init__(self):
+            self.log = []
+
+        def set_text(self, value):
+            self.log.append(value)
+            return True
+
+        def press(self, keys, delay=0.3):
+            self.log.append(tuple(keys))
+            return keys
+
+    proj = googletv.Projector.__new__(googletv.Projector)
+    proj.gtv = Gtv()
+    for text in ("h", "hi", "h", ""):
+        proj.type_text(text)
+    assert proj.gtv.log == ["h", "i", ("KEY_BACKSPACE",), ("KEY_BACKSPACE",)]
+
+
+def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
+    import asyncio
+
+    from androidtvremote2 import remote as rm
+    from androidtvremote2.remotemessage_pb2 import RemoteMessage
+
+    googletv._patch_keyboard_tracking()
+    loop = asyncio.new_event_loop()
+    proto = rm.RemoteProtocol(loop.create_future(), loop.create_future(), lambda *_: None, lambda *_: None,
+                              lambda *_: None, loop, True, False)
+    sent = []
+    proto._send_message = sent.append
+    show = RemoteMessage()
+    show.remote_ime_show_request.remote_text_field_status.counter_field = 7
+    proto._handle_message(show.SerializeToString())
+    assert proto.ime_counter == 7 and proto.keyboard_seen
+
+    g, fake = gtv
+    fake._remote_message_protocol = proto
+    assert g.set_text("rick") is True
+    edit = sent[-1].remote_ime_batch_edit
+    assert edit.ime_counter == 7 and edit.edit_info[0].text_field_status.value == "rick"
+    assert edit.edit_info[0].text_field_status.start == 3
+    g.set_text("")  # cleared on the phone: clear it on the projector too
+    assert sent[-1].remote_ime_batch_edit.edit_info[0].text_field_status.value == ""
+    loop.close()
+
+
 def test_projector_sends_the_whole_box_each_time():
     class Gtv:
         def __init__(self):

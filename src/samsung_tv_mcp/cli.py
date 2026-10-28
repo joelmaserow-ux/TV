@@ -28,6 +28,13 @@ def _gtv(args) -> str:
             return "Pressed " + ", ".join(gtv.press(args.args))
         case "app" | "link":
             return "Opened " + gtv.launch(rest)
+        case "typetest":
+            from .googletv import Projector
+            from .typing_methods import run
+
+            device = Projector(args.ip)
+            name = run(device)
+            return f"Typing method: {name}" if name else "No typing method worked."
         case "type":
             if gtv.set_text(rest):
                 return "Typed."
@@ -80,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("netflix-profiles", help="set the profile names, top to bottom").add_argument("names", nargs="+")
     gtv = sub.add_parser("gtv", help="control a Google TV / Android TV (e.g. the projector)")
     gtv.add_argument("--ip", default=os.environ.get("GOOGLE_TV_HOST"), help="its IP address ($GOOGLE_TV_HOST)")
-    gtv.add_argument("command", choices=["pair", "status", "key", "app", "link", "type", "volume", "power"])
+    gtv.add_argument("command", choices=["pair", "status", "key", "app", "link", "type", "typetest", "volume", "power"])
     gtv.add_argument("args", nargs="*")
     sub.add_parser("install-claude", help="add this server to Claude Desktop's config").add_argument(
         "--config", help="path of the file Settings > Developer > Edit config opens (auto-detected if omitted)")

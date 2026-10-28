@@ -225,26 +225,6 @@ def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
     loop.close()
 
 
-def test_projector_sends_only_new_letters():
-    class Gtv:
-        def __init__(self):
-            self.log = []
-
-        def set_text(self, value):
-            self.log.append(value)
-            return True
-
-        def press(self, keys, delay=0.3):
-            self.log.append(tuple(keys))
-            return keys
-
-    proj = googletv.Projector.__new__(googletv.Projector)
-    proj.gtv = Gtv()
-    for text in ("h", "hi", "h", ""):
-        proj.type_text(text)
-    assert proj.gtv.log == ["h", "i", ("KEY_BACKSPACE",), ("KEY_BACKSPACE",)]
-
-
 def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
     import asyncio
 

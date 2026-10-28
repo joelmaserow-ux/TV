@@ -30,9 +30,12 @@ def _gtv(args) -> str:
             return "Opened " + gtv.launch(rest)
         case "typetest":
             from .googletv import Projector
-            from .typing_methods import run
+            from .typing_methods import run, run_delete
 
             device = Projector(args.ip)
+            if rest.strip().lower() in ("delete", "clear", "deleting"):
+                how = run_delete(device)
+                return f"Deleting method: {how}" if how else "Deleting test finished."
             name = run(device)
             return f"Typing method: {name}" if name else "No typing method worked."
         case "type":

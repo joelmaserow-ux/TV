@@ -574,7 +574,8 @@ class Projector(GoogleTVDevice):
 
         text = text[:200]
         method = typing_methods.load(self.s.host)
-        if not typing_methods.send(self, method, self._typed, text):
+        delete = typing_methods.load_delete(self.s.host)
+        if not typing_methods.send(self, method, self._typed, text, delete):
             raise TVError(
                 "The projector hasn't opened its keyboard for the remote yet. Select the search "
                 "box on the projector (so its keyboard shows), then type again."

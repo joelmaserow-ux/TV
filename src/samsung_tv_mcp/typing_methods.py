@@ -31,36 +31,75 @@ METHODS = {
 DEFAULT = "new-after"
 
 
+# Ways of deleting letters (and clearing) when the typing method doesn't send the whole box.
+#   "key": the Delete key;  "fwd-key": Android's forward-delete key
+#   "box-after"/"box-last": send the shorter box, cursor after / on its last letter
+#   "range": replace the removed letters with nothing;  "range-back": the same, end first
+DELETES = ["key", "box-after", "box-last", "range", "range-back", "fwd-key"]
+DEFAULT_DELETE = "key"
+
+
 def _path(host: str):
     return credentials_path(host).with_name(f"{host}.typing.json")
 
 
-def load(host: str) -> str:
+def _saved(host: str) -> dict:
     try:
-        name = json.loads(_path(host).read_text()).get("method")
+        data = json.loads(_path(host).read_text())
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
-        name = None
+        return {}
+
+
+def load(host: str) -> str:
+    name = _saved(host).get("method")
     return name if name in METHODS else DEFAULT
 
 
-def save(host: str, name: str) -> None:
+def load_delete(host: str) -> str:
+    name = _saved(host).get("delete")
+    return name if name in DELETES else DEFAULT_DELETE
+
+
+def save(host: str, name: str | None = None, delete: str | None = None) -> None:
+    data = _saved(host)
+    if name:
+        data["method"] = name
+    if delete:
+        data["delete"] = delete
     path = _path(host)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"method": name}))
+    path.write_text(json.dumps(data))
 
 
-def send(device, name: str, before: str, after: str) -> bool:
-    """Change the box from `before` to `after` using method `name`."""
+def remove(device, how: str, before: str, after: str) -> bool:
+    """Delete from `before` down to `after` (a prefix of it) using deletion method `how`."""
+    count = len(before) - len(after)
+    if count <= 0:
+        return True
+    if how == "key":
+        device.press([DELETE] * count, delay=0.05)
+        return True
+    if how == "fwd-key":
+        device.press(["FORWARD_DEL"] * count, delay=0.05)
+        return True
+    if how == "box-after":
+        return device.gtv.ime_edit(after, start=len(after))
+    if how == "box-last":
+        return device.gtv.ime_edit(after, start=len(after) - 1)
+    if how == "range":
+        return device.gtv.ime_edit("", start=len(after), end=len(before))
+    return device.gtv.ime_edit("", start=len(before), end=len(after))  # range-back
+
+
+def send(device, name: str, before: str, after: str, delete: str | None = None) -> bool:
+    """Change the box from `before` to `after` using method `name` (and `delete` to remove)."""
     what, cursor, offset, field = METHODS[name]
     same = 0
     while same < min(len(before), len(after)) and before[same] == after[same]:
         same += 1
-    if len(before) > same:
-        if what == "full":
-            # The whole box goes anyway; deleting is just sending the shorter box.
-            pass
-        else:
-            device.press([DELETE] * (len(before) - same), delay=0.05)
+    if len(before) > same and what != "full":  # a whole box covers deleting by itself
+        remove(device, delete or DEFAULT_DELETE, before, before[:same])
     added = after[same:]
     ok = True
     if what == "keys":
@@ -111,6 +150,44 @@ def run(device, ask=input, say=print) -> str | None:
                 say("Typing works; deleting doesn't yet. Tell Claude: 'typing works, deleting doesn't'.")
             return name
     say("None of them typed hi correctly. Tell Claude: 'typing test: none worked'.")
+    return None
+
+
+def run_delete(device, ask=input, say=print) -> str | None:
+    """Try each way of deleting on the projector and keep the first that works (then check Clear)."""
+    host = device.s.host
+    method = load(host)
+    say(f"Typing method saved for this projector: {method}")
+    if METHODS[method][0] == "full":
+        say("It sends the whole box, so deleting and Clear work the same way as typing. Nothing to test.")
+        return None
+    say("Deleting test. On the projector, open YouTube and select its search box so the keyboard shows.")
+    ask("Clear the projector's search box with its own remote, then press Enter here.")
+    send(device, method, "", "h")
+    time.sleep(1.0)
+    send(device, method, "h", "hi")
+    time.sleep(1.5)
+    if not _yes(ask, "Does the projector's box read  hi ?"):
+        say("Typing isn't working right; run the typing test again first:  samsung-tv gtv --ip <ip> typetest")
+        return None
+    for i, how in enumerate(DELETES, 1):
+        say(f"\n[{i}/{len(DELETES)}] Deleting the last letter...")
+        remove(device, how, "hi", "h")
+        time.sleep(1.5)
+        if not _yes(ask, "Did the last letter disappear (box reads  h )?"):
+            continue
+        save(host, delete=how)
+        say(f"Saved: the remote will delete this way ({how}). Now checking Clear...")
+        send(device, method, "h", "hi", how)
+        time.sleep(1.5)
+        remove(device, how, "hi", "")
+        time.sleep(1.5)
+        if _yes(ask, "Is the projector's box now empty?"):
+            say(f"Done. Typing: {method}. Deleting and Clear: {how}.")
+        else:
+            say(f"Done. Typing: {method}. Deleting: {how}, but Clear didn't empty the box. Tell Claude that.")
+        return how
+    say(f"No way of deleting worked. Typing: {method}. Tell Claude: 'deleting test: none worked'.")
     return None
 
 

@@ -45,3 +45,22 @@ def test_typetest_saves_the_first_method_that_works(tmp_path, monkeypatch):
     assert tm.run(FakeDevice(), ask=lambda q: next(answers), say=lambda m: None) == "full-after"
     assert tm.load("10.0.0.9") == "full-after"
     assert tm.load("10.0.0.10") == tm.DEFAULT
+
+
+def test_delete_test_saves_the_way_that_works_and_checks_clear(tmp_path, monkeypatch):
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(tm.time, "sleep", lambda s: None)
+    tm.save("10.0.0.9", "new-after")
+    d = FakeDevice()
+    answers = iter(["", "y", "n", "y", "y"])  # box reads hi; Delete key no; shorter box yes; Clear yes
+    assert tm.run_delete(d, ask=lambda q: next(answers), say=lambda m: None) == "box-after"
+    assert tm.load("10.0.0.9") == "new-after" and tm.load_delete("10.0.0.9") == "box-after"
+    assert d.pressed == ["KEY_BACKSPACE"]
+    assert d.gtv.edits[-1] == ("", 0, 0, False)  # Clear: the empty box
+
+
+def test_remove_ways():
+    d = FakeDevice()
+    tm.remove(d, "range", "hello", "he")
+    tm.remove(d, "box-last", "hi", "h")
+    assert d.gtv.edits == [("", 2, 0, False), ("h", 0, 0, False)]

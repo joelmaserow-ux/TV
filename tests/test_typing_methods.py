@@ -55,7 +55,7 @@ def test_delete_test_saves_the_way_that_works_and_checks_clear(tmp_path, monkeyp
     monkeypatch.setattr(tm.time, "sleep", lambda s: None)
     tm.save("10.0.0.9", "new-after")
     d = FakeDevice()
-    answers = iter(["", "y", "n", "y", "y"])  # box reads hi; Delete key no; shorter box yes; Clear yes
+    answers = iter(["", "", "y", "n", "y", "y"])  # keyboard open, cleared; box reads hi; Delete key no; shorter box yes; Clear yes
     assert tm.run_delete(d, ask=lambda q: next(answers), say=lambda m: None) == "box-after"
     assert tm.load("10.0.0.9") == "new-after" and tm.load_delete("10.0.0.9") == "box-after"
     assert d.pressed == ["KEY_BACKSPACE"]

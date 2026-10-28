@@ -189,7 +189,7 @@ class GoogleTV:
 
         `start`/`end` default to len(value) - 1 (what androidtvremote2 uses). It quotes the
         device's latest edit counter (plus `counter_offset`), then waits for the device to count
-        it. Returns whether the device has said a keyboard is open.
+        it, on devices that report one (the TP3 doesn't report anything).
         """
         from androidtvremote2.remotemessage_pb2 import (
             RemoteEditInfo, RemoteImeBatchEdit, RemoteImeObject, RemoteMessage,
@@ -204,25 +204,6 @@ class GoogleTV:
             proto = remote._remote_message_protocol
             if proto is None:
                 raise TVUnreachable(f"Lost the connection to the Google TV at {self.host}.")
-            if not getattr(proto, "keyboard_seen", False):
-                # Connected after the keyboard opened, so we missed its edit number and a first
-                # edit would be dropped. An empty edit makes the device send the number back.
-                for _ in range(10):
-                    await asyncio.sleep(0.1)
-                    if getattr(proto, "keyboard_seen", False):
-                        break
-                else:
-                    primer = RemoteMessage()
-                    primer.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
-                        ime_counter=getattr(proto, "ime_counter", 0),
-                        field_counter=getattr(proto, "ime_field_counter", 0),
-                        edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=-1, end=-1, value=""))],
-                    ))
-                    proto._send_message(primer)
-                    for _ in range(20):
-                        await asyncio.sleep(0.1)
-                        if getattr(proto, "keyboard_seen", False):
-                            break
             counter = getattr(proto, "ime_counter", 0)
             field = counter if field_from_counter else getattr(proto, "ime_field_counter", 0)
             msg = RemoteMessage()
@@ -233,11 +214,15 @@ class GoogleTV:
             proto._send_message(msg)
             print(f"  sent to projector: {value!r} start={start} end={end} edit={counter + counter_offset} "
                   f"box={field}", flush=True)
-            for _ in range(40):  # until the device has counted this change (up to 2 s)
-                if getattr(proto, "ime_counter", 0) != counter:
-                    break
-                await asyncio.sleep(0.05)
-            return bool(getattr(proto, "keyboard_seen", False))
+            if getattr(proto, "keyboard_seen", False):
+                # Devices that report their edit counter: wait for it to count this change.
+                for _ in range(40):
+                    if getattr(proto, "ime_counter", 0) != counter:
+                        break
+                    await asyncio.sleep(0.05)
+            else:
+                await asyncio.sleep(0.05)  # the TP3 never answers; just keep edits in order
+            return True
 
         return self._run(go())
 
@@ -546,75 +531,6 @@ class Projector(GoogleTVDevice):
         self.press(["KEY_MUTE"])
         return "Toggled mute."
 
-    def box_text(self) -> str | None:
-        """What the device last said its open text box reads (None if it hasn't said)."""
-        proto = getattr(self._remote, "_remote_message_protocol", None) if self._remote else None
-        if proto is None or not getattr(proto, "keyboard_seen", False):
-            return None
-        return getattr(proto, "ime_value", None)
-
-    def set_text(self, value: str) -> bool:
-        """Send `value` to the open text box (how the box takes it depends on the device)."""
-        return self.ime_edit(value)
-
-    def ime_edit(self, value: str, start: int | None = None, end: int | None = None,
-                 counter_offset: int = 0, field_from_counter: bool = False) -> bool:
-        """Send one keyboard edit to the open text box, the way the Google TV app does.
-
-        `start`/`end` default to len(value) - 1 (what androidtvremote2 uses). It quotes the
-        device's latest edit counter (plus `counter_offset`), then waits for the device to count
-        it. Returns whether the device has said a keyboard is open.
-        """
-        from androidtvremote2.remotemessage_pb2 import (
-            RemoteEditInfo, RemoteImeBatchEdit, RemoteImeObject, RemoteMessage,
-        )
-
-        value = value[:200]
-        start = len(value) - 1 if start is None else start
-        end = start if end is None else end
-
-        async def go():
-            remote = await self._connected()
-            proto = remote._remote_message_protocol
-            if proto is None:
-                raise TVUnreachable(f"Lost the connection to the Google TV at {self.host}.")
-            if not getattr(proto, "keyboard_seen", False):
-                # Connected after the keyboard opened, so we missed its edit number and a first
-                # edit would be dropped. An empty edit makes the device send the number back.
-                for _ in range(10):
-                    await asyncio.sleep(0.1)
-                    if getattr(proto, "keyboard_seen", False):
-                        break
-                else:
-                    primer = RemoteMessage()
-                    primer.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
-                        ime_counter=getattr(proto, "ime_counter", 0),
-                        field_counter=getattr(proto, "ime_field_counter", 0),
-                        edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=-1, end=-1, value=""))],
-                    ))
-                    proto._send_message(primer)
-                    for _ in range(20):
-                        await asyncio.sleep(0.1)
-                        if getattr(proto, "keyboard_seen", False):
-                            break
-            counter = getattr(proto, "ime_counter", 0)
-            field = counter if field_from_counter else getattr(proto, "ime_field_counter", 0)
-            msg = RemoteMessage()
-            msg.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
-                ime_counter=counter + counter_offset, field_counter=field,
-                edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=start, end=end, value=value))],
-            ))
-            proto._send_message(msg)
-            print(f"  sent to projector: {value!r} start={start} end={end} edit={counter + counter_offset} "
-                  f"box={field}", flush=True)
-            for _ in range(40):  # until the device has counted this change (up to 2 s)
-                if getattr(proto, "ime_counter", 0) != counter:
-                    break
-                await asyncio.sleep(0.05)
-            return bool(getattr(proto, "keyboard_seen", False))
-
-        return self._run(go())
-
     _typed = ""  # what we've typed into the projector's open box so far
 
     def type_text(self, text: str) -> str:
@@ -631,11 +547,7 @@ class Projector(GoogleTVDevice):
         # projector's own remote (or a new search box) doesn't throw the letters off.
         box = self.gtv.box_text() if hasattr(self.gtv, "box_text") else None
         before = box if box is not None else self._typed
-        if not typing_methods.send(self, method, before, text, delete):
-            raise TVError(
-                "The projector hasn't opened its keyboard for the remote yet. Select the search "
-                "box on the projector (so its keyboard shows), then type again."
-            )
+        typing_methods.send(self, method, before, text, delete)
         self._typed = text
         return ""
 

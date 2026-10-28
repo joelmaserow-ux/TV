@@ -409,7 +409,13 @@
     else if (b.dataset.step) { buzz(); call({ action: "step", steps: Math.sign(+b.dataset.step) * stepSize }, true).then(refreshVolume); }
     else if (b.dataset.app) { buzz(); call({ action: "app", name: b.dataset.app }); }
     else if (b.dataset.action === "off") {
-      if (device === "projector" && !deviceOn) { toast("Turning the projector on…"); call({ action: "on" }).then(() => setTimeout(refresh, 4000)); }
+      const turnOn = () => { toast("Turning the projector on…"); call({ action: "on" }).then(() => setTimeout(refresh, 4000)); };
+      if (device === "projector" && !deviceOn) turnOn();
+      else if (device === "projector") {
+        // Its on/off report can be stale after standby, so always offer both.
+        if (confirm("Turn the projector OFF?\n\nOK = turn off.  Cancel = turn it ON instead.")) call({ action: "off" }).then(refresh);
+        else turnOn();
+      }
       else if (confirm("Turn the " + deviceName() + " off?")) call({ action: "off" }).then(refresh);
     }
     else if (b.dataset.device) switchDevice(b.dataset.device);

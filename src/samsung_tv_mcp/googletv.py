@@ -317,8 +317,51 @@ class GoogleTV:
 
         return self._run(get())
 
+    def wake(self) -> str:
+        """Turn the device on from standby.
+
+        A connection kept open across standby can go stale and still say "on", so start a
+        fresh one. Then send Android's wake-up key (which never turns it off); if it still
+        reports off a few seconds later, press power as well.
+        """
+        self.close()
+
+        async def go():
+            remote = await self._connected()
+            if remote.is_on:
+                return "The projector is on."
+            remote.send_key_command("WAKEUP")
+            for _ in range(40):
+                await asyncio.sleep(0.1)
+                if remote.is_on:
+                    return "Turned the projector on."
+            remote.send_key_command("POWER")
+            for _ in range(40):
+                await asyncio.sleep(0.1)
+                if remote.is_on:
+                    return "Turned the projector on."
+            return "Sent power on; the projector may take a few seconds to show a picture."
+
+        try:
+            return self._run_slow(go(), 15)
+        except TVUnreachable as exc:
+            raise TVUnreachable(
+                "The projector isn't answering on the network, so it can't be woken from here. "
+                "It's probably fully off (switched off at the wall, or its power button held): "
+                "turn it on with its own remote once."
+            ) from exc
+
+    def _run_slow(self, coro, timeout: float):
+        saved, self.timeout = self.timeout, max(self.timeout, timeout)
+        try:
+            return self._run(coro)
+        finally:
+            self.timeout = saved
+
     def power(self, on: bool | None = None) -> str:
         """Toggle power, or set it if `on` is given (needs the device to report its state)."""
+        if on:
+            return self.wake()
         state = self.status().get("on")
         if on is None or state is None or state != on:
             self.press(["KEY_POWER"])

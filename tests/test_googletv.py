@@ -252,3 +252,25 @@ def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
     assert sent[-1].remote_ime_batch_edit.edit_info[0].text_field_status.value == ""
     loop.close()
 
+
+
+def test_turning_on_uses_a_fresh_connection_and_the_wake_key(gtv, monkeypatch):
+    g, fake = gtv
+    fake.is_on = True  # a stale connection still saying "on"
+    g._remote = fake
+    made = []
+
+    class Fresh(FakeRemote):
+        def __init__(self):
+            super().__init__()
+            self.is_on = False
+
+        def send_key_command(self, code):
+            super().send_key_command(code)
+            if code == "WAKEUP":
+                self.is_on = True
+
+    fresh = Fresh()
+    monkeypatch.setattr(g, "_make", lambda: made.append(1) or fresh)
+    assert g.power(True) == "Turned the projector on."
+    assert made and fresh.sent == [("key", "WAKEUP")]  # never the toggling power key

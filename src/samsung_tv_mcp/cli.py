@@ -68,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
     rem.add_argument("--port", type=int, default=8765)
     rem.add_argument("--pin", help="set a new family PIN (otherwise the saved one is reused)")
     rem.add_argument("--projector", metavar="IP", help="also control a Google TV projector (remembered)")
+    auto = sub.add_parser("autostart", help="start the family remote whenever you sign in to this laptop")
+    auto.add_argument("--off", action="store_true", help="stop starting it with the laptop")
+    auto.add_argument("--port", type=int, default=8765)
     typ = sub.add_parser("type", help="type text into the TV's on-screen keyboard")
     typ.add_argument("text")
     typ.add_argument("--enter", action="store_true", help="also finish/submit the text")
@@ -145,6 +148,23 @@ def main(argv: list[str] | None = None) -> int:
                 from .webremote import serve
                 serve(args.port, args.pin, args.projector)
                 return 0
+            case "autostart":
+                from . import autostart
+                from .webremote import lan_ip, load_pin
+
+                if args.off:
+                    out = ("The remote won't start with the laptop any more (it keeps running until "
+                           "you restart)." if autostart.uninstall() else "It wasn't set to start with the laptop.")
+                else:
+                    autostart.install(port=args.port)
+                    out = (
+                        "The family remote now starts by itself whenever you sign in, hidden in the "
+                        "background, and it's starting now.\n\n"
+                        f"  On your phone open:  http://{lan_ip(tv.s.host)}:{args.port}\n"
+                        f"  PIN: {load_pin(tv.s.host)}\n\n"
+                        "Add that page to your phone's home screen. Keep the laptop awake (it stops "
+                        "while the laptop sleeps). To undo: samsung-tv autostart --off"
+                    )
             case "type":
                 from .text_input import type_text
                 type_text(tv.s.host, args.text, args.enter)

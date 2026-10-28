@@ -93,6 +93,18 @@ browser menu) so it opens like an app. Keep the window running; the computer mus
 
 ---
 
+## Start the remote with the laptop
+
+So the family remote is always there while the laptop is on, run this once:
+
+```powershell
+uvx --from $tv samsung-tv autostart
+```
+
+It starts the remote now and every time you sign in, hidden in the background (output in
+`~/.samsung-tv-mcp/remote.log`), and prints the address and PIN for phones. Keep the laptop
+awake while you want to use it. `samsung-tv autostart --off` undoes it.
+
 ## Google TV / Android TV devices (e.g. the TOPTRO TP3 projector)
 
 Pair once (a code appears on the screen), then control it from the command line:

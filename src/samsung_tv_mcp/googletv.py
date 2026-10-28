@@ -171,8 +171,29 @@ class GoogleTV:
         self._run(go())
         return codes
 
-    def type_text(self, text: str) -> None:
-        self._run(self._do(lambda r: r.send_text(text)))
+    def type_text(self, text: str) -> str:
+        """Type `text` into the focused text box, one key press per character.
+
+        The protocol's "phone keyboard" text message only lands when the device has told us a
+        text box is open, which the TP3 doesn't, so press the keys like a USB keyboard would.
+        Search boxes don't care about capitals; characters with no key are left out.
+        """
+        codes = text_keycodes(text)
+
+        async def go():
+            for code in codes:
+                await self._do(lambda r, c=code: r.send_key_command(c))
+                await asyncio.sleep(0.05)
+
+        self._run_long(go(), 2 + len(codes) * 0.2)
+        return "".join(ch for ch in text.lower() if ch in TEXT_KEYS)
+
+    def _run_long(self, coro, timeout: float):
+        saved, self.timeout = self.timeout, max(self.timeout, timeout)
+        try:
+            return self._run(coro)
+        finally:
+            self.timeout = saved
 
     def launch(self, app_or_link: str) -> str:
         """Open an app by friendly name or package, or a deep link (https://, market://...).
@@ -275,6 +296,17 @@ class GoogleTV:
         if self._remote is not None:
             self._remote.disconnect()
             self._remote = None
+
+
+# Characters that can be typed with a key press, and their Android key names.
+TEXT_KEYS = {
+    **{ch: ch.upper() for ch in "abcdefghijklmnopqrstuvwxyz0123456789"},
+    " ": "SPACE", ".": "PERIOD", ",": "COMMA", "-": "MINUS", "'": "APOSTROPHE", "@": "AT", "/": "SLASH",
+}
+
+
+def text_keycodes(text: str) -> list[str]:
+    return [TEXT_KEYS[ch] for ch in text.lower() if ch in TEXT_KEYS]
 
 
 def to_keycode(key: str) -> str:
@@ -441,8 +473,11 @@ class Projector(GoogleTVDevice):
     def type_text(self, text: str) -> str:
         """Type into whatever text box is open on the projector, like the Google TV phone app."""
         text = text[:200]
-        if text:
-            self.gtv.type_text(text)
+        if not text.strip():
+            return ""
+        typed = self.gtv.type_text(text)
+        if not typed:
+            raise TVError("Only letters, numbers and simple punctuation can be typed.")
         return ""
 
     def power_off(self) -> str:

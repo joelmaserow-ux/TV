@@ -61,10 +61,10 @@ def gtv(tmp_path, monkeypatch):
 def test_commands(gtv):
     g, fake = gtv
     assert g.press(["KEY_UP", "ok"], delay=0) == ["DPAD_UP", "DPAD_CENTER"]
-    g.type_text("rick and morty")
+    g.type_text("hi")
     assert g.launch("Disney Plus") == "Opened Disney Plus."
     assert g.launch("https://www.netflix.com/title/80014749") == "Opened https://www.netflix.com/title/80014749."
-    assert fake.sent == [("key", "DPAD_UP"), ("key", "DPAD_CENTER"), ("text", "rick and morty"),
+    assert fake.sent == [("key", "DPAD_UP"), ("key", "DPAD_CENTER"), ("key", "H"), ("key", "I"),
                          ("launch", "https://www.disneyplus.com"), ("launch", "https://www.netflix.com/title/80014749")]
     assert g.status()["device"] == "TOPTRO TP3"
 
@@ -196,3 +196,11 @@ def test_unlinked_youtube_picks_the_account_then_resends_the_video(tmp_path, mon
 def test_typing_keys_map_to_android_delete_and_enter():
     assert googletv.to_keycode("KEY_BACKSPACE") == "DEL"
     assert googletv.to_keycode("KEY_TEXT_ENTER") == "ENTER"
+
+
+def test_typing_presses_a_key_per_character(gtv):
+    g, fake = gtv
+    assert g.type_text("Rick & Morty!") == "rick  morty"
+    keys = [code for kind, code in fake.sent if kind == "key"]
+    assert keys[:4] == ["R", "I", "C", "K"] and keys[4:6] == ["SPACE", "SPACE"] and len(keys) == 11
+    assert not any(kind == "text" for kind, _ in fake.sent)

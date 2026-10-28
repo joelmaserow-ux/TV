@@ -102,7 +102,8 @@ uvx --from $tv samsung-tv autostart
 ```
 
 It starts the remote now and every time you sign in, hidden in the background (output in
-`~/.samsung-tv-mcp/remote.log`), and prints the address and PIN for phones. Keep the laptop
+`~/.samsung-tv-mcp/remote.log`), fetches the newest version each start, restarts it if it ever
+stops, and prints the address and PIN for phones. Nothing to paste again after this. Keep the laptop
 awake while you want to use it. `samsung-tv autostart --off` undoes it.
 
 ## Google TV / Android TV devices (e.g. the TOPTRO TP3 projector)

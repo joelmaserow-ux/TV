@@ -13,6 +13,7 @@ def test_install_writes_a_hidden_startup_script_and_off_removes_it(tmp_path, mon
     assert ', 0, False' in text  # hidden, don't wait
     assert '""C:\\Users\\b\\.local\\bin\\uvx.exe"" --from git+https://github.com/joelmaserow-ux/TV@' in text
     assert "samsung-tv remote --port 8765" in text and "remote.log" in text
+    assert "--refresh --from" in text and "for /l %i in (0,0,1)" in text  # newest version, kept running
     assert autostart.uninstall() is True and not path.exists()
     assert autostart.uninstall() is False
 

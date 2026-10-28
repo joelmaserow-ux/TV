@@ -196,6 +196,8 @@ class GoogleTV:
                 edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=end, end=end, value=value))],
             ))
             proto._send_message(msg)
+            print(f"  sent to projector: {value!r} (box {getattr(proto, 'ime_field_counter', 0)}, "
+                  f"edit {getattr(proto, 'ime_counter', 0)})", flush=True)
             return bool(getattr(proto, "keyboard_seen", False))
 
         return self._run(go())
@@ -328,10 +330,15 @@ def _patch_keyboard_tracking() -> None:
             box = msg.remote_ime_show_request.remote_text_field_status
             if box.counter_field:
                 self.ime_field_counter = box.counter_field
-            if not getattr(self, "keyboard_seen", False):
-                print(f"Projector keyboard is open (box {box.counter_field}); typing will go there.", flush=True)
+            self.ime_value = box.value
+            print(f"  projector: keyboard open, box {box.counter_field}, it reads {box.value!r}", flush=True)
             self.keyboard_seen = True
         elif msg.HasField("remote_ime_batch_edit"):
+            edit = msg.remote_ime_batch_edit
+            values = [e.text_field_status.value for e in edit.edit_info]
+            if values:
+                self.ime_value = values[-1]
+            print(f"  projector: box {edit.field_counter} (edit {edit.ime_counter}) reads {values!r}", flush=True)
             self.keyboard_seen = True
 
     rm.RemoteProtocol._handle_message = handle
@@ -523,6 +530,8 @@ class Projector(GoogleTVDevice):
                 edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=end, end=end, value=value))],
             ))
             proto._send_message(msg)
+            print(f"  sent to projector: {value!r} (box {getattr(proto, 'ime_field_counter', 0)}, "
+                  f"edit {getattr(proto, 'ime_counter', 0)})", flush=True)
             return bool(getattr(proto, "keyboard_seen", False))
 
         return self._run(go())

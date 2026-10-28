@@ -294,3 +294,13 @@ def test_watch_looks_up_season_count_and_types_a_short_query(monkeypatch):
     presses = [e[1][0] for e in tv.events if e[0] == "press"]
     tail = [k for keys, _ in netflix.episode_steps(2, 3, seasons=7) for k in keys]
     assert presses[-len(tail):] == tail
+
+
+def test_from_start_presses_up_then_ok_on_the_show_page(monkeypatch):
+    _fake_clock(monkeypatch)
+    tv = FakeTV()
+    msg = netflix.watch(tv, "Ben", "Rick and Morty", from_start=True)
+    assert msg.endswith("Playing from the beginning.")
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    # The search's own OK opens the show page; then Up onto the button above Play, and OK.
+    assert presses[-3:] == ["KEY_ENTER", "KEY_UP", "KEY_ENTER"]

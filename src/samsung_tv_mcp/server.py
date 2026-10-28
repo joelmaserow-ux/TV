@@ -100,17 +100,18 @@ async def open_app(app: str, params: str = "") -> str:
 
 @mcp.tool()
 async def open_netflix(profile: str, show: str = "", season: int | None = None,
-                       episode: int | None = None, play: bool = True) -> str:
+                       episode: int | None = None, play: bool = True, from_start: bool = False) -> str:
     """Open Netflix as a profile (Jad, Bianca, Lee, Ben or Joel, unless reconfigured).
 
     With `show`, it then searches Netflix for it and opens it: with `season` and/or `episode`
     (1-based) it plays that episode, otherwise with `play` it presses Continue/Start Watching
-    (play=False stops on the show's page). This drives the TV's on-screen keyboard and takes
+    (play=False stops on the show's page; from_start=True plays it from the beginning instead
+    of resuming). This drives the TV's on-screen keyboard and takes
     1-2 minutes; don't send other keys meanwhile.
     """
     from . import netflix
 
-    return await run(netflix.watch, tv(), profile, show, season, episode, play)
+    return await run(netflix.watch, tv(), profile, show, season, episode, play, None, None, from_start)
 
 
 @mcp.tool()

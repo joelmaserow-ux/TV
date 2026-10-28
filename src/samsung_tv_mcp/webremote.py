@@ -120,7 +120,8 @@ class RemoteApp:
                 seasons = int(body["seasons"]) if body.get("seasons") else None
                 return self.start_job(
                     netflix.watch, str(body["profile"]), str(body.get("show", "")), season, episode,
-                    bool(body.get("play")), body.get("year") or None, seasons, device=dev,
+                    bool(body.get("play")), body.get("year") or None, seasons, bool(body.get("from_start")),
+                    device=dev,
                     label=("Projector: " if projector else "") + "Opening Netflix" + (f" for {what}" if what else ""))
             case "netflix_episodes":
                 from .episodes import seasons

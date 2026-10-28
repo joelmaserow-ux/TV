@@ -301,7 +301,9 @@
     </div>
     <div class="card">
       <button class="big netflix" id="sheetPlay" type="button"><svg class="icon-svg"><use href="#i-play"/></svg>
-        <span>Play<small>Continue watching, or start from the beginning</small></span></button>
+        <span>Play / Resume<small>Carry on where you left off, or start watching</small></span></button>
+      <button class="big" id="sheetStart" type="button" style="margin-top:10px"><svg class="icon-svg"><use href="#i-play"/></svg>
+        <span>Play from the start<small>Start again from the beginning</small></span></button>
       <button class="big" id="sheetPick" type="button" style="margin-top:10px"><svg class="icon-svg"><use href="#i-list"/></svg>
         <span>Choose an episode<small>Pick the season and episode</small></span></button>
     </div>
@@ -589,6 +591,8 @@
   window.addEventListener("popstate", () => $("sheet").classList.add("hidden"));
 
   $("sheetPlay").addEventListener("click", () => { buzz(); startNetflix({ show: current.title, year: current.year, play: true }); });
+
+  $("sheetStart").addEventListener("click", () => { buzz(); startNetflix({ show: current.title, year: current.year, from_start: true }); });
 
   $("sheetPick").addEventListener("click", async () => {
     buzz();

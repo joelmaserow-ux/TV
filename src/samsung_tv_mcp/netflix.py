@@ -316,11 +316,12 @@ def season_count(title: str, year=None) -> int | None:
 
 
 def watch(tv, profile: str, title: str = "", season: int | None = None, episode: int | None = None,
-          play: bool = False, year=None, seasons: int | None = None) -> str:
+          play: bool = False, year=None, seasons: int | None = None, from_start: bool = False) -> str:
     """Open Netflix as `profile`; if given, find `title`.
 
     Then either play `season`/`episode` of it, or with `play` press OK on its page, which is
-    Netflix's Continue Watching / Start Watching button. Otherwise it stops on the page.
+    Netflix's Continue Watching / Start Watching button, or with `from_start` press Up then
+    OK, which is the button above it (play from the beginning). Otherwise it stops on the page.
     `seasons` is how many seasons Netflix has of it (looked up if not given).
     """
     wants_episode = season is not None or episode is not None
@@ -348,6 +349,10 @@ def watch(tv, profile: str, title: str = "", season: int | None = None, episode:
     if wants_episode:
         time.sleep(float(data["title_wait"]))
         return f"{opened} {found} {open_episode(tv, season, episode, seasons)}"
+    if from_start:
+        time.sleep(float(data["title_wait"]))
+        _press_slowly(tv, ["KEY_UP", "KEY_ENTER"], 0.6)
+        return f"{opened} {found} Playing from the beginning."
     if play:
         time.sleep(float(data["title_wait"]))
         tv.press(["KEY_ENTER"])

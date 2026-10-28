@@ -62,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     nf.add_argument("--wait", type=float, help="seconds Netflix needs to load before Exit (remembered)")
     nf.add_argument("--show", default="", help="search for this show/movie and open it")
     nf.add_argument("--play", action="store_true", help="with --show: press Continue/Start Watching")
+    nf.add_argument("--from-start", action="store_true", help="with --show: play it from the beginning")
     nf.add_argument("--season", type=int, help="with --show: play this season...")
     nf.add_argument("--episode", type=int, help="...and this episode")
     nf.add_argument("--home-wait", type=float,
@@ -150,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
                     if args.home_wait:
                         data["home_wait"] = args.home_wait
                     netflix.save(tv.s.host, data)
-                out = netflix.watch(tv, args.profile, args.show, args.season, args.episode, args.play)
+                out = netflix.watch(tv, args.profile, args.show, args.season, args.episode, args.play,
+                                    from_start=args.from_start)
             case "netflix-search":
                 from . import netflix
                 out = netflix.search(tv, args.show)

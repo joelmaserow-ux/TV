@@ -137,6 +137,9 @@ uvx --from $tv samsung-tv gtv --ip 192.168.86.177 typetest
 
 (`typetest letters`, `typetest delete` and `typetest fast` run just one part.)
 
+Power works the same way: `samsung-tv gtv --ip 192.168.86.177 powertest` tries each way of
+turning it off and then on, asks y/n after each, and saves what works for the power button.
+
 Set `GOOGLE_TV_HOST` to skip `--ip`. It uses the same protocol as the Google TV phone app
 (`androidtvremote2`); no developer mode needed.
 

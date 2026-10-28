@@ -317,6 +317,22 @@ class GoogleTV:
 
         return self._run(get())
 
+    def send_key(self, key: str, hold: bool = False, fresh: bool = False) -> None:
+        """Press one Android key (held for 2 s with `hold`), optionally on a fresh connection."""
+        if fresh:
+            self.close()
+
+        async def go():
+            remote = await self._connected()
+            if hold:
+                remote.send_key_command(key, "START_LONG")
+                await asyncio.sleep(2)
+                remote.send_key_command(key, "END_LONG")
+            else:
+                remote.send_key_command(key)
+
+        self._run(go())
+
     def wake(self) -> str:
         """Turn the device on from standby.
 
@@ -596,10 +612,25 @@ class Projector(GoogleTVDevice):
         return ""
 
     def power_off(self) -> str:
-        return self.gtv.power(False)
+        from . import power_methods
+
+        power_methods.send(self.gtv, power_methods.OFF, power_methods.saved(self.s.host)["off"])
+        return "Turned the projector off."
 
     def power_on(self) -> str:
-        return self.gtv.power(True)
+        from . import power_methods
+
+        name = power_methods.saved(self.s.host)["on"]
+        if name == power_methods.DEFAULT_ON:
+            return self.gtv.wake()  # wake-up key, then power if it still reports off
+        try:
+            power_methods.send(self.gtv, power_methods.ON, name, fresh=True)
+        except TVUnreachable as exc:
+            raise TVUnreachable(
+                "The projector isn't answering on the network, so it can't be turned on from here. "
+                "Turn it on with its own remote."
+            ) from exc
+        return "Turned the projector on."
 
     def is_on(self) -> bool:
         try:

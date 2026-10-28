@@ -10,7 +10,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from .config import Settings
-from . import keymap, youtube
+from . import cancel, keymap, youtube
 from .encrypted import EncryptedPairing, EncryptedRemote, credentials_path
 from .legacy import LegacyRemote, TVError, normalize_key
 from .power import cec_power_on, send_wol
@@ -253,7 +253,7 @@ class TV:
                     self.press(["KEY_CONTENTS"])
                 except TVError:
                     pass
-            time.sleep(2)
+            cancel.sleep(2)
 
     def _launch(self, name: str, params: str = "") -> None:
         self.wait_for_apps()
@@ -263,7 +263,7 @@ class TV:
             if "refused" not in str(exc).lower():
                 raise
             # The service can drop connections for a moment while Smart Hub settles.
-            time.sleep(3)
+            cancel.sleep(3)
             self.wait_for_apps()
             self.dial.launch(name, params)
 
@@ -291,11 +291,11 @@ class TV:
                     self.press(["KEY_ENTER"])
                 except TVError:
                     pass
-            time.sleep(2)
+            cancel.sleep(2)
         if just_opened:
             # "Online" comes long before the app can take a video: anything sent while it is
             # still starting up gets replaced by the home screen. youtube.play also retries.
-            time.sleep(float(os.environ.get("SAMSUNG_TV_YOUTUBE_STARTUP", "15")))
+            cancel.sleep(float(os.environ.get("SAMSUNG_TV_YOUTUBE_STARTUP", "15")))
 
     def link_youtube(self, code: str) -> str:
         name = youtube.link(self.s.host, code)

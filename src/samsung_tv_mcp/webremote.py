@@ -16,7 +16,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import keymap, netflix
+from . import cancel, keymap, netflix
 from .config import Settings
 from .encrypted import credentials_path
 from .legacy import TVError, normalize_key
@@ -25,16 +25,72 @@ from .tv import TV
 PAGE = (Path(__file__).parent / "remote.html").read_text(encoding="utf-8")
 
 
+# Actions that only read or look things up: never wait, never interrupt anything.
+PASSIVE = {"status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes",
+           "devices", "channels", "channel_videos", "youtube_link"}
+# Volume works alongside whatever is running, without stopping it.
+VOLUME = {"volume", "step", "mute"}
+VOLUME_KEYS = {"KEY_VOLUP", "KEY_VOLDOWN", "KEY_MUTE"}
+STOPPED = "Stopped: something newer was asked for."
+
+
+class _Slot:
+    """One device's running command. A newer command stops it and takes over."""
+
+    def __init__(self):
+        self.lock = threading.Lock()  # held by the command that's driving the device
+        self.press_lock = threading.Lock()  # single key presses, so they never overlap
+        self.state = threading.Lock()
+        self.current: threading.Event | None = None
+        self.job: str | None = None  # label of the background routine, for the busy banner
+        self.job_result: dict | None = None
+
+    def take_over(self) -> threading.Event:
+        """Stop whatever is running on this device; the returned event belongs to the new command."""
+        event = threading.Event()
+        with self.state:
+            if self.current is not None:
+                self.current.set()
+            self.current = event
+        return event
+
+    def finish(self, event: threading.Event) -> None:
+        with self.state:
+            if self.current is event:
+                self.current = None
+
+
+class _Guarded:
+    """A device whose key presses stop as soon as a newer command arrives."""
+
+    def __init__(self, dev, slot: _Slot):
+        self._dev, self._slot = dev, slot
+
+    def press(self, keys, *args, **kwargs):
+        cancel.check()
+        with self._slot.press_lock:
+            return self._dev.press(keys, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._dev, name)
+
+
 class RemoteApp:
     def __init__(self, tv: TV, pin: str, projector=None):
         self.tv = tv
         self.projector = projector
         self.pin = pin
-        # One command at a time: the TV protocols don't like overlapping connections.
-        self.lock = threading.Lock()
+        self.slots = {"tv": _Slot(), "projector": _Slot()}
         self.found_apps: list[dict] | None = None
-        self.job: str | None = None
-        self.job_result: dict | None = None
+
+    # The TV's slot, for callers and tests that only know about one device.
+    @property
+    def lock(self):
+        return self.slots["tv"].lock
+
+    @property
+    def job(self):
+        return self.slots["tv"].job
 
     def discover_apps(self) -> None:
         """Look up which apps the TV can open (runs in the background at startup)."""
@@ -55,43 +111,63 @@ class RemoteApp:
             return self.projector
         return self.tv
 
-    def start_job(self, fn, *args, label: str, device=None) -> str:
+    def slot(self, body: dict) -> _Slot:
+        return self.slots["projector" if self.device(body) is self.projector else "tv"]
+
+    def start_job(self, fn, *args, label: str, device=None, slot: _Slot | None = None) -> str:
         """Run a long TV routine (like the Netflix search) in the background.
 
-        It takes the TV lock for its whole run, so other buttons can't interleave key presses
-        with it; they get a "busy" message instead of hanging.
+        It replaces whatever that device was doing, and is itself replaced by the next command.
         """
-        if self.job is not None:
-            raise TVError(f"Busy: {self.job}. Wait for it to finish.")
-        self.job, self.job_result = label, None
+        slot = slot or self.slots["tv"]
+        event = slot.take_over()
+        slot.job, slot.job_result = label, None
+        dev = _Guarded(device or self.tv, slot)
 
         def run():
             try:
-                with self.lock:
-                    self.job_result = {"ok": True, "message": fn(device or self.tv, *args)}
+                with slot.lock, cancel.scope(event):
+                    cancel.check()
+                    slot.job_result = {"ok": True, "message": fn(dev, *args)}
+            except cancel.Cancelled:
+                slot.job_result = {"ok": True, "message": STOPPED}
             except Exception as exc:
-                self.job_result = {"ok": False, "message": str(exc)}
+                slot.job_result = {"ok": False, "message": str(exc)}
             finally:
-                self.job = None
-                print(f"{time.strftime('%H:%M:%S')}  {label} -> {self.job_result['message']}", flush=True)
+                slot.finish(event)
+                if not event.is_set():
+                    slot.job = None
+                print(f"{time.strftime('%H:%M:%S')}  {label} -> {slot.job_result['message']}", flush=True)
 
         threading.Thread(target=run, daemon=True).start()
-        return f"{label}… this takes 1–2 minutes. Leave the remote alone until it's done."
+        return f"{label}… this takes 1–2 minutes. Tap anything else to stop it."
 
     def handle(self, body: dict) -> str:
         action = body.get("action")
-        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes", "devices", "channels", "channel_videos"):
-            raise TVError(f"Busy: {self.job}. Wait for it to finish.")
-        # These don't press keys, so they never wait behind a long job holding the lock.
-        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find", "netflix_episodes", "devices", "channels", "channel_videos"):
+        if action in PASSIVE:
             return self._handle(body)
-        with self.lock:
-            return self._handle(body)
+        slot = self.slot(body)
+        keys = [normalize_key(k) for k in body.get("keys", [])] if action == "key" else []
+        if action in VOLUME or (keys and set(keys) <= VOLUME_KEYS):
+            with slot.press_lock:
+                return self._handle(body)
+        if action == "netflix_watch":
+            return self._handle(body)  # starts its own background job, which takes over
+        # Anything else is a new command: stop what's running on this device and do this instead.
+        event = slot.take_over()
+        slot.job = None
+        try:
+            with slot.lock, cancel.scope(event):
+                return self._handle(body, _Guarded(self.device(body), slot))
+        except cancel.Cancelled:
+            return STOPPED
+        finally:
+            slot.finish(event)
 
-    def _handle(self, body: dict) -> str:
+    def _handle(self, body: dict, dev=None) -> str:
         action = body.get("action")
-        dev = self.device(body)
-        projector = dev is self.projector
+        projector = self.device(body) is self.projector
+        dev = dev or self.device(body)
         match action:
             case "key":
                 keys = [normalize_key(k) for k in body.get("keys", [])][:20]
@@ -121,7 +197,7 @@ class RemoteApp:
                 return self.start_job(
                     netflix.watch, str(body["profile"]), str(body.get("show", "")), season, episode,
                     bool(body.get("play")), body.get("year") or None, seasons, bool(body.get("from_start")),
-                    device=dev,
+                    device=dev, slot=self.slot(body),
                     label=("Projector: " if projector else "") + "Opening Netflix" + (f" for {what}" if what else ""))
             case "netflix_episodes":
                 from .episodes import seasons
@@ -138,7 +214,8 @@ class RemoteApp:
                 from .netflix_search import search as find
                 return json.dumps(find(str(body.get("query", ""))[:100]))
             case "job":
-                return json.dumps({"busy": self.job is not None, "last": self.job_result})
+                slot = self.slot(body)
+                return json.dumps({"busy": slot.job is not None, "last": slot.job_result})
             case "youtube_link":
                 return dev.link_youtube(str(body["code"]))
             case "search":

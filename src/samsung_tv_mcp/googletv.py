@@ -12,6 +12,7 @@ import os
 import threading
 from pathlib import Path
 
+from . import cancel
 from .encrypted import credentials_path
 from .legacy import TVError, TVUnreachable
 
@@ -373,9 +374,9 @@ class GoogleTVDevice:
             just_opened = self.dial.status("YouTube") != "running"
             self.gtv.launch(watch)
             if just_opened:
-                time.sleep(self.PICK_ACCOUNT_AFTER)
+                cancel.sleep(self.PICK_ACCOUNT_AFTER)
                 self.press(["KEY_ENTER"])
-                time.sleep(6)
+                cancel.sleep(6)
                 self.gtv.launch(watch)
             return (
                 f"Opened {link} on the projector. If it stops on YouTube's home screen, link YouTube "
@@ -390,9 +391,9 @@ class GoogleTVDevice:
             if just_opened and not picked and time.monotonic() - began >= self.PICK_ACCOUNT_AFTER:
                 picked = True  # "Who's watching?" on a fresh start: OK picks the highlighted account
                 self.press(["KEY_ENTER"])
-            time.sleep(2)
+            cancel.sleep(2)
         if just_opened:
-            time.sleep(8)
+            cancel.sleep(8)
         if youtube.play(self.s.host, video_id, start):
             return f"Playing {link} on the projector."
         return f"Sent {link} to the projector's YouTube app."

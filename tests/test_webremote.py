@@ -107,31 +107,66 @@ def test_capabilities_include_found_apps(server):
     assert code == 200 and json.loads(data["message"])["found_apps"] is None
 
 
-def test_netflix_watch_runs_in_background_and_blocks_other_keys(server, monkeypatch):
-    import threading as th
+def _slow_netflix(monkeypatch, presses=None):
+    """A fake Netflix routine that keeps pressing keys until it's stopped."""
     import samsung_tv_mcp.netflix as nf
-    base, tv = server
-    release = th.Event()
+    from samsung_tv_mcp import cancel
 
     def slow_watch(tv_, profile, show, season=None, episode=None, play=False, year=None, seasons=None, from_start=False):
-        release.wait(5)
+        for _ in range(200):
+            cancel.sleep(0.05)
+            tv_.press(["KEY_DOWN"])
         return f"Opened Netflix as {profile}. Searched for {show}."
 
     monkeypatch.setattr(nf, "watch", slow_watch)
+
+
+def _job(base, device="tv"):
+    return json.loads(post(base, {"action": "job", "device": device})[1]["message"])
+
+
+def _wait_until(check):
+    for _ in range(100):
+        if check():
+            return True
+        threading.Event().wait(0.05)
+    return False
+
+
+def test_volume_works_alongside_netflix_and_a_new_command_replaces_it(server, monkeypatch):
+    base, tv = server
+    _slow_netflix(monkeypatch)
+    played = []
+    tv.play_youtube = lambda url: played.append(url) or "Playing it."
+    tv.step_volume = lambda steps: f"Volume {steps:+d}."
     code, data = post(base, {"action": "netflix_watch", "profile": "Ben", "show": "rick and morty"})
     assert data["ok"] and "1–2 minutes" in data["message"]
-    # Keys are refused while it runs, but status still answers straight away.
-    assert "Busy" in post(base, {"action": "key", "keys": ["KEY_UP"]})[1]["message"]
-    assert post(base, {"action": "status"})[1]["ok"]
-    assert json.loads(post(base, {"action": "job"})[1]["message"])["busy"] is True
-    release.set()
-    for _ in range(50):
-        job = json.loads(post(base, {"action": "job"})[1]["message"])
-        if not job["busy"]:
-            break
-        th.Event().wait(0.05)
-    assert job["last"] == {"ok": True, "message": "Opened Netflix as Ben. Searched for rick and morty."}
-    assert post(base, {"action": "key", "keys": ["KEY_UP"]})[1]["ok"]
+    assert _job(base)["busy"] is True
+    # Volume answers straight away and doesn't stop Netflix.
+    assert post(base, {"action": "step", "steps": 1})[1] == {"ok": True, "message": "Volume +1."}
+    assert post(base, {"action": "key", "keys": ["KEY_VOLUP"]})[1]["ok"]
+    assert _job(base)["busy"] is True
+    # A YouTube video is a new command: Netflix stops and the video plays.
+    assert post(base, {"action": "youtube", "url": "https://youtu.be/aqz-KE-bpKQ"})[1]["message"] == "Playing it."
+    assert played == ["https://youtu.be/aqz-KE-bpKQ"]
+    assert _wait_until(lambda: _job(base)["last"] is not None)
+    job = _job(base)
+    assert job["busy"] is False and job["last"]["message"] == webremote.STOPPED
+    downs = tv.remote.sent.count("KEY_DOWN")
+    threading.Event().wait(0.2)
+    assert tv.remote.sent.count("KEY_DOWN") == downs  # no more Netflix presses after it stopped
+
+
+def test_a_second_netflix_request_replaces_the_first(server, monkeypatch):
+    base, tv = server
+    _slow_netflix(monkeypatch)
+    post(base, {"action": "netflix_watch", "profile": "Ben", "show": "rick and morty"})
+    post(base, {"action": "netflix_watch", "profile": "Joel", "show": "stranger things"})
+    assert _job(base)["busy"] is True
+    import samsung_tv_mcp.netflix as nf
+    monkeypatch.setattr(nf, "watch", lambda *a, **k: "done")
+    post(base, {"action": "key", "keys": ["KEY_HOME"]})  # take over, which stops the second one too
+    assert _wait_until(lambda: not _job(base)["busy"])
 
 
 def test_netflix_watch_passes_season_and_episode(server, monkeypatch):
@@ -184,6 +219,13 @@ def test_device_switch_routes_to_projector(tmp_path, monkeypatch):
         assert caps["volume_max"] == 15 and caps["found_apps"][0]["name"] == "Disney+" and caps["power_on"]
         assert post(base, {"action": "on", "device": "projector"})[1]["ok"] and proj.on
         assert "can't be turned on" in post(base, {"action": "on"})[1]["message"]
+        # A command for the TV doesn't stop what the projector is doing.
+        _slow_netflix(monkeypatch)
+        post(base, {"action": "netflix_watch", "profile": "Ben", "show": "rick", "device": "projector"})
+        post(base, {"action": "key", "keys": ["KEY_HOME"]})
+        assert _job(base, "projector")["busy"] is True and _job(base)["busy"] is False
+        post(base, {"action": "key", "keys": ["KEY_HOME"], "device": "projector"})
+        assert _wait_until(lambda: not _job(base, "projector")["busy"])
     finally:
         httpd.shutdown()
 

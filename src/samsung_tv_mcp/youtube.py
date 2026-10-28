@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 
+from . import cancel
 from .encrypted import credentials_path
 from .legacy import TVError
 
@@ -69,7 +70,7 @@ class _NowPlaying:
 def _run(coro):
     try:
         return asyncio.run(coro)
-    except TVError:
+    except (TVError, cancel.Cancelled):
         raise
     except Exception as exc:  # pyytlounge surfaces raw aiohttp / KeyError failures
         raise TVError(f"YouTube's casting service failed: {exc!r}") from exc
@@ -125,7 +126,7 @@ async def _is_online(host: str) -> bool:
 
 def play(host: str, video_id: str, start: int | None = None) -> bool:
     """Cast a video. Returns True once the TV confirms it's playing it (False if it can't tell)."""
-    return _run(_play(host, video_id, start))
+    return _run(_play(host, video_id, start, stopped=cancel.stopper()))
 
 
 async def _connect(api) -> None:
@@ -135,7 +136,7 @@ async def _connect(api) -> None:
             raise TVError(RELINK_HINT)
 
 
-async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) -> bool:
+async def _play(host: str, video_id: str, start: int | None, attempts: int = 4, stopped=lambda: False) -> bool:
     # Never send the lounge "terminate" (api.disconnect): older TV apps treat the remote
     # leaving as the end of the session and drop back to the account picker. Sessions we
     # just stop using expire on YouTube's side without touching playback.
@@ -143,6 +144,8 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
     async with _api(listener) as api:
         await _refresh(api, host)
         for attempt in range(attempts + 1):
+            if stopped():
+                raise cancel.Cancelled()  # something newer was asked for; don't cast this one
             listener.reset()
             await _connect(api)
             if attempt:
@@ -167,5 +170,8 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
             })
             if not ok:
                 raise TVError("YouTube refused to start the video.")
-            await asyncio.sleep(5)
+            for _ in range(20):
+                if stopped():
+                    raise cancel.Cancelled()
+                await asyncio.sleep(0.25)
         raise TVError("The TV's YouTube app kept ignoring the video. " + RELINK_HINT)

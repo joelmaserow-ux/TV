@@ -11,6 +11,7 @@ import json
 import os
 import time
 
+from . import cancel
 from .encrypted import credentials_path
 from .legacy import TVError
 
@@ -112,7 +113,7 @@ def _wait_for_state(tv, wanted: str, timeout: float) -> bool:
     while time.monotonic() < deadline:
         if _state(tv) == wanted:
             return True
-        time.sleep(1)
+        cancel.sleep(1)
     return _state(tv) == wanted
 
 
@@ -128,23 +129,23 @@ def _fully_exit(tv, wait: float, attempts: int = 3) -> None:
     tv._launch("Netflix")
     # Only trust the TV's running/stopped report for Netflix if it ever says "running".
     reports_state = _wait_for_state(tv, "running", 30)
-    time.sleep(wait)
+    cancel.sleep(wait)
     steps = layout(tv)["exit"]
     for _ in range(attempts):
         for keys, pause in steps:
             for i, key in enumerate(keys):
                 if i:
-                    time.sleep(0.6)
+                    cancel.sleep(0.6)
                 tv.press([key])
             if pause:
-                time.sleep(pause)
+                cancel.sleep(pause)
         if not reports_state:
-            time.sleep(3)
+            cancel.sleep(3)
             return
         if _wait_for_state(tv, "stopped", 6):
-            time.sleep(2)  # let it finish quitting before relaunching
+            cancel.sleep(2)  # let it finish quitting before relaunching
             return
-        time.sleep(3)  # still open: probably still loading; give it a moment and retry
+        cancel.sleep(3)  # still open: probably still loading; give it a moment and retry
     raise TVError(
         "Netflix didn't quit, so it can't be opened on the profile screen. Exit Netflix with the "
         "TV remote (Exit, then Yes) and try again."
@@ -162,12 +163,12 @@ def open_as(tv, name: str) -> str:
     keys = profile_keys(data["profiles"], name)
     _fully_exit(tv, float(data["startup_wait"]))
     tv._launch("Netflix")
-    time.sleep(float(data["profile_wait"]))
+    cancel.sleep(float(data["profile_wait"]))
     # One press per connection with a gap, like a person pressing the remote; a burst sent
     # in one go was ignored by the profile screen.
     for key in keys:
         tv.press([key])
-        time.sleep(0.6)
+        cancel.sleep(0.6)
     chosen = next(p for p in data["profiles"] if p.lower() == name.strip().lower())
     return f"Opened Netflix as {chosen}."
 
@@ -245,7 +246,7 @@ TO_SEARCH = ["KEY_LEFT", "KEY_UP", "KEY_ENTER"]
 def _press_slowly(tv, keys: list[str], gap: float) -> None:
     for key in keys:
         tv.press([key])
-        time.sleep(gap)
+        cancel.sleep(gap)
 
 
 def search(tv, title: str) -> str:
@@ -256,10 +257,10 @@ def search(tv, title: str) -> str:
         raise ValueError("Type the name of a show or movie.")
     for keys, pause in layout(tv)["to_search"]:
         _press_slowly(tv, keys, pause)
-    time.sleep(float(data.get("keyboard_wait", 4)))
+    cancel.sleep(float(data.get("keyboard_wait", 4)))
     keys, end = _type(typed, tuple(layout(tv).get("space_landing", (0, 0))))
     _press_slowly(tv, keys, float(data.get("type_gap", 0.4)))
-    time.sleep(2)  # let the results update after the last letter
+    cancel.sleep(2)  # let the results update after the last letter
     _press_slowly(tv, to_first_result(end), 0.6)
     return f"Searched Netflix for “{typed}” and opened the first result."
 
@@ -296,7 +297,7 @@ def open_episode(tv, season: int, episode: int, seasons: int | None = None) -> s
     for keys, pause in episode_steps(season, episode, seasons):
         _press_slowly(tv, keys, 0.6)
         if pause:
-            time.sleep(float(data[pause]))
+            cancel.sleep(float(data[pause]))
     return f"Playing season {season}, episode {episode}."
 
 
@@ -344,17 +345,17 @@ def watch(tv, profile: str, title: str = "", season: int | None = None, episode:
     if not title.strip():
         return opened
     data = load(tv.s.host)
-    time.sleep(float(data["home_wait"]))
+    cancel.sleep(float(data["home_wait"]))
     found = search(tv, typed)
     if wants_episode:
-        time.sleep(float(data["title_wait"]))
+        cancel.sleep(float(data["title_wait"]))
         return f"{opened} {found} {open_episode(tv, season, episode, seasons)}"
     if from_start:
-        time.sleep(float(data["title_wait"]))
+        cancel.sleep(float(data["title_wait"]))
         _press_slowly(tv, ["KEY_UP", "KEY_ENTER"], 0.6)
         return f"{opened} {found} Playing from the beginning."
     if play:
-        time.sleep(float(data["title_wait"]))
+        cancel.sleep(float(data["title_wait"]))
         tv.press(["KEY_ENTER"])
         return f"{opened} {found} Pressed Play (Continue / Start Watching)."
     return f"{opened} {found}"

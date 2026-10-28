@@ -264,40 +264,64 @@ def search(tv, title: str) -> str:
     return f"Searched Netflix for “{typed}” and opened the first result."
 
 
-def episode_steps(season: int, episode: int) -> list[tuple[list[str], str]]:
+def episode_steps(season: int, episode: int, seasons: int | None = None) -> list[tuple[list[str], str]]:
     """(presses, pause-setting) pairs from a show's page to playing season/episode.
 
-    On this TV: Down 7 (to the bottom of the show page's menu, wherever the highlight started),
-    Up 4 and OK lands on and opens the episodes view; Left goes to the season list (even if
-    the highlight started on an episode), which starts on Season 1; Down to the season;
-    Right lands on that season's first episode; Down to the episode; OK plays it.
+    Down 7 (to the bottom of the show page's menu, wherever the highlight started), Up 4 and
+    OK opens the episodes view; Left goes to the season list, which doesn't always start on
+    Season 1. Up past the top leaves the list, but Down past the bottom stays on the last
+    season, so with `seasons` (how many Netflix has) go Down past the end, then Up to the wanted
+    one. Then Right lands on that season's first episode; Down to the episode; OK plays it.
+    Without `seasons`, assume the list starts on Season 1.
     """
     if season < 1 or episode < 1:
         raise ValueError("Season and episode start at 1.")
+    if seasons is not None and season > seasons:
+        raise ValueError(f"Netflix only has {seasons} season{'s' if seasons != 1 else ''} of this here.")
+    if seasons:
+        to_season = ["KEY_DOWN"] * (seasons + 3) + ["KEY_UP"] * (seasons - season)
+    else:
+        to_season = ["KEY_DOWN"] * (season - 1)
     return [
         (["KEY_DOWN"] * 7 + ["KEY_UP"] * 4 + ["KEY_ENTER"], "episodes_wait"),
         (["KEY_LEFT"], "step_wait"),
-        (["KEY_DOWN"] * (season - 1) + ["KEY_RIGHT"], "season_wait"),
+        (to_season + ["KEY_RIGHT"], "season_wait"),
         (["KEY_DOWN"] * (episode - 1) + ["KEY_ENTER"], ""),
     ]
 
 
-def open_episode(tv, season: int, episode: int) -> str:
+def open_episode(tv, season: int, episode: int, seasons: int | None = None) -> str:
     """From a show's page (just opened from search), play the given episode."""
     data = load(tv.s.host)
-    for keys, pause in episode_steps(season, episode):
+    for keys, pause in episode_steps(season, episode, seasons):
         _press_slowly(tv, keys, 0.6)
         if pause:
             time.sleep(float(data[pause]))
     return f"Playing season {season}, episode {episode}."
 
 
+def season_count(title: str, year=None) -> int | None:
+    """How many seasons Netflix has of `title` here: JustWatch's Netflix list, else TVmaze."""
+    from .netflix_search import netflix_seasons
+
+    numbers = netflix_seasons(title, year)
+    if numbers:
+        return len(numbers)
+    try:
+        from .episodes import seasons
+
+        return len(seasons(title, year)["seasons"]) or None
+    except TVError:
+        return None
+
+
 def watch(tv, profile: str, title: str = "", season: int | None = None, episode: int | None = None,
-          play: bool = False) -> str:
+          play: bool = False, year=None, seasons: int | None = None) -> str:
     """Open Netflix as `profile`; if given, find `title`.
 
     Then either play `season`/`episode` of it, or with `play` press OK on its page, which is
     Netflix's Continue Watching / Start Watching button. Otherwise it stops on the page.
+    `seasons` is how many seasons Netflix has of it (looked up if not given).
     """
     wants_episode = season is not None or episode is not None
     if wants_episode:
@@ -305,16 +329,25 @@ def watch(tv, profile: str, title: str = "", season: int | None = None, episode:
             raise ValueError("Say which show the season and episode are for.")
         season = 1 if season is None else season
         episode = 1 if episode is None else episode
-        episode_steps(season, episode)  # validate before touching the TV
+        if seasons is None:
+            seasons = season_count(title, year)
+            if seasons is not None and season > seasons:
+                seasons = None  # the lookup is behind Netflix; fall back to counting from Season 1
+        episode_steps(season, episode, seasons)  # validate before touching the TV
+    typed = title
+    if title.strip():
+        from .netflix_search import short_query
+
+        typed = short_query(title, year)
     opened = open_as(tv, profile)
     if not title.strip():
         return opened
     data = load(tv.s.host)
     time.sleep(float(data["home_wait"]))
-    found = search(tv, title)
+    found = search(tv, typed)
     if wants_episode:
         time.sleep(float(data["title_wait"]))
-        return f"{opened} {found} {open_episode(tv, season, episode)}"
+        return f"{opened} {found} {open_episode(tv, season, episode, seasons)}"
     if play:
         time.sleep(float(data["title_wait"]))
         tv.press(["KEY_ENTER"])

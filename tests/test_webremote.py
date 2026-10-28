@@ -113,7 +113,7 @@ def test_netflix_watch_runs_in_background_and_blocks_other_keys(server, monkeypa
     base, tv = server
     release = th.Event()
 
-    def slow_watch(tv_, profile, show, season=None, episode=None, play=False):
+    def slow_watch(tv_, profile, show, season=None, episode=None, play=False, year=None, seasons=None):
         release.wait(5)
         return f"Opened Netflix as {profile}. Searched for {show}."
 
@@ -138,14 +138,14 @@ def test_netflix_watch_passes_season_and_episode(server, monkeypatch):
     import samsung_tv_mcp.netflix as nf
     base, tv = server
     got = []
-    monkeypatch.setattr(nf, "watch", lambda tv_, p, show, season, episode, play=False: got.append((p, show, season, episode)) or "ok")
-    code, data = post(base, {"action": "netflix_watch", "profile": "Ben", "show": "Rick and Morty", "season": "2", "episode": "4"})
+    monkeypatch.setattr(nf, "watch", lambda tv_, p, show, season, episode, play=False, year=None, seasons=None: got.append((p, show, season, episode, seasons)) or "ok")
+    code, data = post(base, {"action": "netflix_watch", "profile": "Ben", "show": "Rick and Morty", "season": "2", "episode": "4", "seasons": 7})
     assert "S2 E4" in data["message"]
     for _ in range(50):
         if got:
             break
         __import__("time").sleep(0.05)
-    assert got == [("Ben", "Rick and Morty", 2, 4)]
+    assert got == [("Ben", "Rick and Morty", 2, 4, 7)]
 
 
 class FakeProjector(FakeTV):

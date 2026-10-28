@@ -270,3 +270,27 @@ def test_typing_after_space_counts_from_where_down_lands(landing):
             typed += " " if r == 0 else rows[r][c]
         assert 0 <= r <= 6 and 0 <= c <= 5
     assert typed == "rick and morty"
+
+
+def test_episode_steps_with_season_count_go_past_the_bottom_then_up():
+    D, U, L, R, OK = "KEY_DOWN", "KEY_UP", "KEY_LEFT", "KEY_RIGHT", "KEY_ENTER"
+    steps = [k for k, _ in netflix.episode_steps(2, 3, seasons=7)]
+    assert steps[1] == [L]
+    assert steps[2] == [D] * 10 + [U] * 5 + [R]  # Down past Season 7, Up 5 to Season 2
+    assert steps[3] == [D, D, OK]
+    with pytest.raises(ValueError):
+        netflix.episode_steps(8, 1, seasons=7)
+
+
+def test_watch_looks_up_season_count_and_types_a_short_query(monkeypatch):
+    from samsung_tv_mcp import netflix_search
+
+    _fake_clock(monkeypatch)
+    monkeypatch.setattr(netflix_search, "netflix_seasons", lambda title, year=None: [1, 2, 3, 4, 5, 6, 7])
+    monkeypatch.setattr(netflix_search, "short_query", lambda title, year=None: "rick")
+    tv = FakeTV()
+    msg = netflix.watch(tv, "Ben", "Rick and Morty", season=2, episode=3)
+    assert "“rick”" in msg
+    presses = [e[1][0] for e in tv.events if e[0] == "press"]
+    tail = [k for keys, _ in netflix.episode_steps(2, 3, seasons=7) for k in keys]
+    assert presses[-len(tail):] == tail

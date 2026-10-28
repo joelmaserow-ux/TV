@@ -117,13 +117,22 @@ class RemoteApp:
                 what = str(body.get("show", ""))
                 if what and (season or episode):
                     what += f" S{season or 1} E{episode or 1}"
+                seasons = int(body["seasons"]) if body.get("seasons") else None
                 return self.start_job(
                     netflix.watch, str(body["profile"]), str(body.get("show", "")), season, episode,
-                    bool(body.get("play")), device=dev,
+                    bool(body.get("play")), body.get("year") or None, seasons, device=dev,
                     label=("Projector: " if projector else "") + "Opening Netflix" + (f" for {what}" if what else ""))
             case "netflix_episodes":
                 from .episodes import seasons
-                return json.dumps(seasons(str(body.get("title", ""))[:100], body.get("year") or None))
+                from .netflix_search import netflix_seasons
+                title, year = str(body.get("title", ""))[:100], body.get("year") or None
+                data = seasons(title, year)
+                on_netflix = netflix_seasons(title, year)
+                if on_netflix:
+                    # Only list what Netflix has here, so the season math matches its list.
+                    data["seasons"] = [s for s in data["seasons"] if s["number"] in on_netflix]
+                data["netflix_seasons"] = len(on_netflix) if on_netflix else None
+                return json.dumps(data)
             case "netflix_find":
                 from .netflix_search import search as find
                 return json.dumps(find(str(body.get("query", ""))[:100]))

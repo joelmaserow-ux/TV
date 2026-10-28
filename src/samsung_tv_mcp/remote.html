@@ -588,7 +588,7 @@
   $("sheetBack").addEventListener("click", closeSheet);
   window.addEventListener("popstate", () => $("sheet").classList.add("hidden"));
 
-  $("sheetPlay").addEventListener("click", () => { buzz(); startNetflix({ show: current.title, play: true }); });
+  $("sheetPlay").addEventListener("click", () => { buzz(); startNetflix({ show: current.title, year: current.year, play: true }); });
 
   $("sheetPick").addEventListener("click", async () => {
     buzz();
@@ -600,6 +600,7 @@
     const r = await call({ action: "netflix_episodes", title: current.title, year: current.year }, true);
     const data = r.ok && json(r);
     if (!data || !data.seasons.length) { note($("episodeList"), "No episode list found for this one. Tap Play instead."); return; }
+    current.seasons = data.netflix_seasons || data.seasons.length;
     const chips = $("seasonChips");
     data.seasons.forEach((s, i) => {
       const b = document.createElement("button");
@@ -635,7 +636,8 @@
       b.append(pic, text);
       b.addEventListener("click", () => {
         buzz();
-        startNetflix({ show: current.title, season: season.number, episode: ep.number });
+        startNetflix({ show: current.title, year: current.year, seasons: current.seasons,
+          season: season.number, episode: ep.number });
       });
       list.append(b);
     }

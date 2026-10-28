@@ -25,6 +25,17 @@ from .tv import TV
 PAGE = (Path(__file__).parent / "remote.html").read_text(encoding="utf-8")
 
 
+def _version() -> str:
+    """Short commit this copy was installed from (shown at the bottom of the page)."""
+    from .autoupdate import installed
+
+    source = installed()
+    return source[2][:7] if source else "dev"
+
+
+VERSION = _version()
+
+
 # Actions that only read or look things up: never wait, never interrupt anything.
 PASSIVE = {"status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes",
            "devices", "channels", "channel_videos", "youtube_link"}
@@ -262,7 +273,7 @@ class RemoteApp:
                     return json.dumps({
                         "unsupported": [], "found_apps": dev.apps(), "volume_max": dev.volume_max(),
                         "netflix_profiles": netflix.load(dev.s.host)["profiles"], "power_on": True,
-                        "youtube_linked": linked, "typing": True,
+                        "youtube_linked": linked, "typing": True, "version": VERSION,
                     })
                 data = keymap.load(self.tv.s.host)
                 return json.dumps({
@@ -274,6 +285,7 @@ class RemoteApp:
                     "power_on": False,
                     "youtube_linked": linked,
                     "typing": False,
+                    "version": VERSION,
                 })
         raise ValueError(f"Unknown action {action!r}")
 

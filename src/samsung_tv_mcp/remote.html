@@ -295,6 +295,7 @@
       <p class="hint" id="appsHint">Checking which apps this TV can open…</p>
     </div>
   </section>
+  <p class="hint" id="version" style="text-align:center;opacity:.6"></p>
 </main>
 
 <!-- Netflix title: play or choose an episode -->
@@ -730,6 +731,7 @@
     stepSize = (caps.volume_max || 100) <= 30 ? 1 : 2;
     renderApps(caps.found_apps);
     $("typeCard").classList.toggle("hidden", !caps.typing);
+    if (caps.version) $("version").textContent = "Version " + caps.version;
     const linked = caps.youtube_linked !== false;
     $("ytFix").open = !linked;
     $("ytFixTitle").textContent = linked ? "Fix YouTube ▾" : "Set up YouTube (once) ▾";

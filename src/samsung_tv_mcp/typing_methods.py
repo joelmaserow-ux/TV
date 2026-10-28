@@ -28,7 +28,7 @@ METHODS = {
     "keys": ("keys", "", 0, False),
     "new-last": ("new", "last", 0, False),
 }
-DEFAULT = "new-after"
+DEFAULT = "new-after-sent"  # what the TOPTRO TP3 takes (typetest, fast test all OK)
 
 
 # Ways of deleting letters (and clearing) when the typing method doesn't send the whole box.
@@ -36,7 +36,7 @@ DEFAULT = "new-after"
 #   "box-after"/"box-last": send the shorter box, cursor after / on its last letter
 #   "range": replace the removed letters with nothing;  "range-back": the same, end first
 DELETES = ["key", "box-after", "box-last", "range", "range-back", "fwd-key"]
-DEFAULT_DELETE = "key"
+DEFAULT_DELETE = "key"  # the TP3's Delete key works
 
 
 def _path(host: str):

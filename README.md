@@ -113,6 +113,16 @@ with `samsung-tv remote --projector 192.168.0.71` once; it's remembered. Netflix
 use the same routines as the TV (`samsung-tv --gtv <ip> netflix Ben --show "..."`); Netflix is
 force-stopped from Settings first so it reopens on the profile screen.
 
+Typing from the remote's Remote tab goes live onto the projector's open search box. Devices
+differ in how they take typed text; if typing goes wrong on a new device, run the yes/no
+tests (close the remote first) and they save whatever works:
+
+```powershell
+uvx --from $tv samsung-tv gtv --ip 192.168.86.177 typetest         # find how it takes letters
+uvx --from $tv samsung-tv gtv --ip 192.168.86.177 typetest delete  # then deleting and Clear
+uvx --from $tv samsung-tv gtv --ip 192.168.86.177 typetest fast    # check it at phone speed
+```
+
 Set `GOOGLE_TV_HOST` to skip `--ip`. It uses the same protocol as the Google TV phone app
 (`androidtvremote2`); no developer mode needed.
 

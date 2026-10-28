@@ -212,8 +212,6 @@ class GoogleTV:
                 edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=start, end=end, value=value))],
             ))
             proto._send_message(msg)
-            print(f"  sent to projector: {value!r} start={start} end={end} edit={counter + counter_offset} "
-                  f"box={field}", flush=True)
             if getattr(proto, "keyboard_seen", False):
                 # Devices that report their edit counter: wait for it to count this change.
                 for _ in range(40):
@@ -356,14 +354,12 @@ def _patch_keyboard_tracking() -> None:
             # change has to quote, or the device merges it with an older state of the box.
             self.ime_counter = box.counter_field
             self.ime_value = box.value
-            print(f"  projector: keyboard open, box {box.counter_field}, it reads {box.value!r}", flush=True)
             self.keyboard_seen = True
         elif msg.HasField("remote_ime_batch_edit"):
             edit = msg.remote_ime_batch_edit
             values = [e.text_field_status.value for e in edit.edit_info]
             if values:
                 self.ime_value = values[-1]
-            print(f"  projector: box {edit.field_counter} (edit {edit.ime_counter}) reads {values!r}", flush=True)
             self.keyboard_seen = True
 
     rm.RemoteProtocol._handle_message = handle

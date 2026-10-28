@@ -206,11 +206,10 @@
         <input id="typeText" type="text" placeholder="Type here, it appears on the projector" aria-label="Type on the projector"
           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
       </form>
-      <div class="row" style="--cols:2;margin-top:8px">
+      <div class="row" style="--cols:1;margin-top:8px">
         <button class="small" type="button" id="typeClear">Clear</button>
-        <button class="small" type="button" id="typeEnter">Search / Enter</button>
       </div>
-      <p class="hint" style="margin-bottom:0">Select a search box on the projector first (so its keyboard shows). What you type here shows up there as you type.</p>
+      <p class="hint" style="margin-bottom:0">Select a search box on the projector first (so its keyboard shows). What you type here shows up there as you type; then use the arrows to pick a result.</p>
     </div>
 
     <div class="card">
@@ -528,26 +527,26 @@
   });
   // Live typing: send the whole box shortly after each change, so the projector's box follows it.
   let typeTimer = null, typeSent = "", typeWarned = false;
-  async function sendTyping() {
+  let typeQueue = Promise.resolve();
+  function sendTyping() {
     clearTimeout(typeTimer);
-    const text = $("typeText").value;
-    if (text === typeSent) return;
-    typeSent = text;
-    const r = await call({ action: "type", text }, "silent");
-    if (!r.ok && !typeWarned) { typeWarned = true; toast(r.message, true); }
-    if (r.ok) typeWarned = false;
+    // One at a time and in order: the server types only the difference from the last one.
+    typeQueue = typeQueue.then(async () => {
+      const text = $("typeText").value;
+      if (text === typeSent) return;
+      typeSent = text;
+      const r = await call({ action: "type", text }, "silent");
+      if (!r.ok && !typeWarned) { typeWarned = true; toast(r.message, true); }
+      if (r.ok) typeWarned = false;
+    });
+    return typeQueue;
   }
   $("typeText").addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(sendTyping, 150); });
   $("typeText").addEventListener("focus", () => { typeWarned = false; });
   $("typeForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     await sendTyping();
-    call({ action: "key", keys: ["KEY_TEXT_ENTER"] }, true);
-  });
-  $("typeEnter").addEventListener("click", async (ev) => {
-    ev.stopPropagation(); buzz();
-    await sendTyping();
-    call({ action: "key", keys: ["KEY_TEXT_ENTER"] }, true);
+    $("typeText").blur();
   });
   $("typeClear").addEventListener("click", (ev) => {
     ev.stopPropagation(); buzz();

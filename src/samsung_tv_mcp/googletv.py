@@ -172,11 +172,16 @@ class GoogleTV:
         self._run(go())
         return codes
 
-    def set_text(self, value: str) -> bool:
-        """Make the open text box on the screen read `value`, like typing on the Google TV app.
+    def keyboard_box(self) -> int:
+        """The number of the text box the device last said is open (0 if none yet)."""
+        remote = self._remote
+        proto = getattr(remote, "_remote_message_protocol", None) if remote else None
+        return int(getattr(proto, "ime_field_counter", 0) or 0)
 
-        Sends the whole box each time, so it can follow a phone's text box letter by letter
-        (deleting included). Returns whether the device has said a keyboard is open.
+    def set_text(self, value: str) -> bool:
+        """Insert `value` at the cursor of the open text box, like typing on the Google TV app.
+
+        Returns whether the device has said a keyboard is open.
         """
         from androidtvremote2.remotemessage_pb2 import (
             RemoteEditInfo, RemoteImeBatchEdit, RemoteImeObject, RemoteMessage,
@@ -500,11 +505,16 @@ class Projector(GoogleTVDevice):
         self.press(["KEY_MUTE"])
         return "Toggled mute."
 
-    def set_text(self, value: str) -> bool:
-        """Make the open text box on the screen read `value`, like typing on the Google TV app.
+    def keyboard_box(self) -> int:
+        """The number of the text box the device last said is open (0 if none yet)."""
+        remote = self._remote
+        proto = getattr(remote, "_remote_message_protocol", None) if remote else None
+        return int(getattr(proto, "ime_field_counter", 0) or 0)
 
-        Sends the whole box each time, so it can follow a phone's text box letter by letter
-        (deleting included). Returns whether the device has said a keyboard is open.
+    def set_text(self, value: str) -> bool:
+        """Insert `value` at the cursor of the open text box, like typing on the Google TV app.
+
+        Returns whether the device has said a keyboard is open.
         """
         from androidtvremote2.remotemessage_pb2 import (
             RemoteEditInfo, RemoteImeBatchEdit, RemoteImeObject, RemoteMessage,
@@ -529,13 +539,35 @@ class Projector(GoogleTVDevice):
 
         return self._run(go())
 
+    _typed = ""  # what we've typed into the projector's open box so far
+    _box = 0
+
     def type_text(self, text: str) -> str:
-        """Make the open text box on the projector read `text` (sent live as you type)."""
-        if not self.gtv.set_text(text[:200]):
-            raise TVError(
-                "The projector hasn't opened its keyboard for the remote yet. Select the search box "
-                "on the projector (so its keyboard shows), then type again."
-            )
+        """Make the projector's open text box read `text`, sent live as the phone's box changes.
+
+        The device only inserts text at its cursor, so send just the difference: Delete for
+        letters that went away, then the new letters.
+        """
+        text = text[:200]
+        box = self.gtv.keyboard_box()
+        if box != self._box:
+            self._box, self._typed = box, ""  # a different box is open: start from empty
+        old = self._typed
+        same = 0
+        while same < min(len(old), len(text)) and old[same] == text[same]:
+            same += 1
+        deletes = len(old) - same
+        if deletes:
+            self.press(["KEY_BACKSPACE"] * deletes, delay=0.05)
+        added = text[same:]
+        self._typed = old[:same]
+        if added:
+            if not self.gtv.set_text(added):
+                raise TVError(
+                    "The projector hasn't opened its keyboard for the remote yet. Select the search "
+                    "box on the projector (so its keyboard shows), then type again."
+                )
+        self._typed = text
         return ""
 
     def power_off(self) -> str:

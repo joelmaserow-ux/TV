@@ -223,3 +223,35 @@ def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
     g.set_text("")  # cleared on the phone: clear it on the projector too
     assert sent[-1].remote_ime_batch_edit.edit_info[0].text_field_status.value == ""
     loop.close()
+
+
+def test_projector_types_only_the_difference():
+    class Gtv:
+        def __init__(self):
+            self.log, self.box = [], 3
+
+        def keyboard_box(self):
+            return self.box
+
+        def set_text(self, value):
+            self.log.append(("insert", value))
+            return True
+
+        def press(self, keys, delay=0.3):
+            self.log.append(("press", tuple(keys)))
+            return keys
+
+    proj = googletv.Projector.__new__(googletv.Projector)
+    proj.gtv = Gtv()
+    for text in ("m", "mr", "mr b", "mr", "mrbeast", ""):
+        proj.type_text(text)
+    D = "KEY_BACKSPACE"
+    assert proj.gtv.log == [
+        ("insert", "m"), ("insert", "r"), ("insert", " b"),
+        ("press", (D, D)), ("insert", "beast"),
+        ("press", (D,) * 7),
+    ]
+    proj.gtv.log.clear()
+    proj.gtv.box = 4  # a new search box opened: nothing to delete from it
+    proj.type_text("rick")
+    assert proj.gtv.log == [("insert", "rick")]

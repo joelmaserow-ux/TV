@@ -156,7 +156,7 @@ def test_netflix_on_google_tv_uses_its_own_exit_and_search_route(tmp_path, monke
     assert "Ben" in msg
     k = fake.keys
     force_stop = (["KEY_MENU", "KEY_ENTER"] + ["KEY_DOWN"] * 4 + ["KEY_RIGHT", "KEY_DOWN", "KEY_ENTER"]
-                  + ["KEY_DOWN"] * 8 + ["KEY_RIGHT", "KEY_DOWN", "KEY_ENTER", "KEY_ENTER"])
+                  + ["KEY_DOWN", "KEY_ENTER", "KEY_ENTER"])
     n = len(force_stop)
     assert k[:n] == force_stop  # force-stop Netflix from Settings
     assert k[n:n + 8] == netflix.profile_keys(netflix.DEFAULT_PROFILES, "Ben")

@@ -419,13 +419,16 @@ def serve(port: int = 8765, pin: str | None = None, projector: str | None = None
         device = Projector(projector_ip)
     app = RemoteApp(TV(settings), pin, device)
     threading.Thread(target=app.discover_apps, daemon=True).start()
+    from . import autoupdate
+
+    updating = autoupdate.start(lambda: any(slot.running() for slot in app.slots.values()))
     server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(app))
     print("Family TV remote is running.\n")
     print(f"  Open on any phone or laptop on your Wi-Fi:  http://{lan_ip(settings.host)}:{port}")
     print(f"  PIN: {pin}")
     print(f"  Projector: {projector_ip}" if projector_ip else "  Projector: not set up (add --projector <IP>)")
     print()
-    print("Keep this window open. Press Ctrl+C to stop.")
+    print("Updates install themselves." if updating else "Keep this window open. Press Ctrl+C to stop.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

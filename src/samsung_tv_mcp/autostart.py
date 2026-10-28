@@ -2,7 +2,8 @@
 
 `samsung-tv autostart` puts a small script in your Startup folder that runs
 `samsung-tv remote` hidden in the background (its output goes to remote.log), starts it
-straight away, picks up the newest version each time, and restarts it if it ever stops. `samsung-tv autostart --off` removes it.
+straight away, picks up the newest version each time, and restarts it if it ever stops.
+While running it checks for updates itself (see autoupdate), so nothing needs typing again. `samsung-tv autostart --off` removes it.
 """
 
 from __future__ import annotations
@@ -41,8 +42,8 @@ def install(source: str = SOURCE, port: int = 8765, start_now: bool = True) -> P
     run = f'"{uvx}" --from {source} samsung-tv remote --port {port}'
     # Forever: fetch the newest version (falling back to the saved one when offline), run the
     # remote, and if it ever stops, start it again 10 seconds later.
-    command = (f'for /l %i in (0,0,1) do ( ({run.replace("--from", "--refresh --from", 1)} || {run}) '
-               f'> "{log}" 2>&1 & timeout /t 10 /nobreak > nul )')
+    command = (f'set "SAMSUNG_TV_AUTOUPDATE=1" & for /l %i in (0,0,1) do ( ({run.replace("--from", "--refresh --from", 1)} '
+               f'|| {run}) > "{log}" 2>&1 & timeout /t 10 /nobreak > nul )')
     path = startup_folder() / SCRIPT
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_vbs(command), encoding="utf-8")

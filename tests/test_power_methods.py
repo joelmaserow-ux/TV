@@ -55,3 +55,22 @@ def test_says_so_when_it_drops_off_the_network(tmp_path, monkeypatch):
 
 def test_defaults():
     assert pm.saved("10.9.9.1") == {"off": pm.DEFAULT_OFF, "on": pm.DEFAULT_ON}
+
+
+def test_no_way_found_makes_the_power_button_explain(tmp_path, monkeypatch):
+    import pytest
+
+    from samsung_tv_mcp import googletv
+    from samsung_tv_mcp.legacy import TVError
+
+    _quiet(monkeypatch, tmp_path)
+    g = Gtv()
+    answers = iter(["", "n"] * len(pm.OFF))
+    assert pm.run(Device(g), ask=lambda q: next(answers), say=lambda m: None) == {"off": None, "on": None}
+    proj = googletv.Projector.__new__(googletv.Projector)
+    proj.gtv, proj.s = g, type("S", (), {"host": "10.0.0.8"})()
+    sent = len(g.sent)
+    for action in (proj.power_off, proj.power_on):
+        with pytest.raises(TVError, match="own remote"):
+            action()
+    assert len(g.sent) == sent  # nothing sent: no more restarting the stick

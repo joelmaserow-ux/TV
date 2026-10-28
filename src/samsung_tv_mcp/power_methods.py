@@ -40,9 +40,10 @@ def saved(host: str) -> dict:
         data = json.loads(_path(host).read_text())
     except (OSError, ValueError):
         data = {}
+    # "none": the test found no way, so the power button explains instead of guessing.
     return {
-        "off": data.get("off") if data.get("off") in OFF else DEFAULT_OFF,
-        "on": data.get("on") if data.get("on") in ON else DEFAULT_ON,
+        "off": data.get("off") if data.get("off") in (*OFF, "none") else DEFAULT_OFF,
+        "on": data.get("on") if data.get("on") in (*ON, "none") else DEFAULT_ON,
     }
 
 
@@ -75,7 +76,9 @@ def run(device, ask=input, say=print) -> dict:
             found["off"] = name
             break
     if not found["off"]:
-        say("Nothing turned it off properly. Tell Claude: 'power test: no off worked'.")
+        save(host, off="none", on="none")
+        say("Nothing turned it off properly, so the remote's power button will now say to use the "
+            "projector's own remote instead. Tell Claude: 'power test: no off worked'.")
         return found
     save(host, off=found["off"])
     say(f"Saved: off = {found['off']}.")

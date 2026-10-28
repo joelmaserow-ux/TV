@@ -560,6 +560,10 @@ LABELS = {
 }
 
 
+NO_POWER = ("This projector's power can't be switched from its Google TV stick (the power test "
+            "found no way). Use the projector's own remote for on and off; everything else works here.")
+
+
 class Projector(GoogleTVDevice):
     """The Google TV device with the same methods the family remote calls on the Samsung TV."""
 
@@ -614,13 +618,18 @@ class Projector(GoogleTVDevice):
     def power_off(self) -> str:
         from . import power_methods
 
-        power_methods.send(self.gtv, power_methods.OFF, power_methods.saved(self.s.host)["off"])
+        name = power_methods.saved(self.s.host)["off"]
+        if name == "none":
+            raise TVError(NO_POWER)
+        power_methods.send(self.gtv, power_methods.OFF, name)
         return "Turned the projector off."
 
     def power_on(self) -> str:
         from . import power_methods
 
         name = power_methods.saved(self.s.host)["on"]
+        if name == "none":
+            raise TVError(NO_POWER)
         if name == power_methods.DEFAULT_ON:
             return self.gtv.wake()  # wake-up key, then power if it still reports off
         try:

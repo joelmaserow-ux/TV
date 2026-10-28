@@ -254,3 +254,15 @@ def test_typing_goes_to_the_projector_only(tmp_path, monkeypatch):
         app.handle({"action": "type", "text": "rick"})
     caps = json.loads(app.handle({"action": "capabilities", "device": "projector"}))
     assert caps["typing"] is True
+
+
+def test_new_projector_address_keeps_pairing_and_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    assert webremote.projector_host("1.2.3.4", "192.168.0.71") == "192.168.0.71"
+    for name in ("googletv-cert.pem", "googletv-key.pem", "googletv-cert.paired", "youtube.json"):
+        (tmp_path / f"192.168.0.71.{name}").write_text(name)
+    (tmp_path / "192.168.0.7.youtube.json").write_text("someone else")
+    assert webremote.projector_host("1.2.3.4", "192.168.86.177") == "192.168.86.177"
+    assert (tmp_path / "192.168.86.177.googletv-cert.paired").read_text() == "googletv-cert.paired"
+    assert (tmp_path / "192.168.86.177.youtube.json").read_text() == "youtube.json"
+    assert webremote.projector_host("1.2.3.4") == "192.168.86.177"  # remembered for next time

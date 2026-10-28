@@ -371,15 +371,41 @@ def projector_host(host: str, given: str | None = None) -> str | None:
     """The projector's IP: given now (and remembered), $GOOGLE_TV_HOST, or remembered earlier."""
     path = credentials_path(host).with_name("remote-projector")
     if given:
+        given = given.strip()
+        try:
+            old = path.read_text().strip()
+        except OSError:
+            old = ""
+        if old and old != given:
+            carry_over(old, given)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(given.strip())
-        return given.strip()
+        path.write_text(given)
+        return given
     if os.environ.get("GOOGLE_TV_HOST"):
         return os.environ["GOOGLE_TV_HOST"].strip()
     try:
         return path.read_text().strip() or None
     except OSError:
         return None
+
+
+def carry_over(old_host: str, new_host: str) -> list[str]:
+    """The projector got a new IP: reuse its pairing, YouTube link and Netflix settings.
+
+    None of them depend on the address (the projector trusts our certificate, YouTube knows
+    its screen id), so copy every file saved under the old address to the new one, unless
+    the new one already has its own.
+    """
+    folder = credentials_path(new_host).parent
+    copied = []
+    for f in sorted(folder.glob(f"{old_host}.*")):
+        target = f.with_name(new_host + f.name[len(old_host):])
+        if f.is_file() and not target.exists():
+            target.write_bytes(f.read_bytes())
+            copied.append(target.name)
+    if copied:
+        print(f"Projector moved from {old_host} to {new_host}: kept its pairing and settings.", flush=True)
+    return copied
 
 
 def serve(port: int = 8765, pin: str | None = None, projector: str | None = None) -> None:

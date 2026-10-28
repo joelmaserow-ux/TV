@@ -1,8 +1,10 @@
-"""Ways of typing into a Google TV's text box, and a yes/no test to find the one that works.
+"""Ways of typing into a Google TV's text box, and yes/no tests to find the ones that work.
 
-Devices disagree on what a keyboard edit means: some take the whole box, some insert what
-they're sent, some want the cursor after the text. `samsung-tv gtv typetest` types "hi"
-each way and asks which came out right, then saves that one for the family remote.
+Devices, and even apps on one device, disagree on what a keyboard edit means: some take the
+whole box, some insert what they're sent, some want the cursor after the text. The tests
+(`samsung-tv gtv typetest`) type into whatever search box is open, ask whether it came out
+right, and save what works for the app that's open, so YouTube, Netflix and the Google TV
+home screen can each type their own way.
 """
 
 from __future__ import annotations
@@ -28,8 +30,7 @@ METHODS = {
     "keys": ("keys", "", 0, False),
     "new-last": ("new", "last", 0, False),
 }
-DEFAULT = "new-after-sent"  # what the TOPTRO TP3 takes (typetest, fast test all OK)
-
+DEFAULT = "new-after-sent"  # what the TOPTRO TP3 takes in YouTube and Netflix
 
 # Ways of deleting letters (and clearing) when the typing method doesn't send the whole box.
 #   "key": the Delete key;  "fwd-key": Android's forward-delete key
@@ -38,6 +39,15 @@ DEFAULT = "new-after-sent"  # what the TOPTRO TP3 takes (typetest, fast test all
 DELETES = ["key", "box-after", "box-last", "range", "range-back", "fwd-key"]
 DEFAULT_DELETE = "key"  # the TP3's Delete key works
 
+FRIENDLY = {
+    "com.google.android.youtube.tv": "YouTube",
+    "com.netflix.ninja": "Netflix",
+    "com.google.android.apps.tv.launcherx": "the Google TV home screen",
+    "com.google.android.katniss": "Google TV search",
+}
+
+
+# --- saved settings ---------------------------------------------------------------------------
 
 def _path(host: str):
     return credentials_path(host).with_name(f"{host}.typing.json")
@@ -51,26 +61,53 @@ def _saved(host: str) -> dict:
         return {}
 
 
-def load(host: str) -> str:
-    name = _saved(host).get("method")
-    return name if name in METHODS else DEFAULT
+def settings(host: str, app: str | None = None) -> dict:
+    """How to type in `app` on this device: {"method", "delete", "chunk"}.
 
-
-def load_delete(host: str) -> str:
-    name = _saved(host).get("delete")
-    return name if name in DELETES else DEFAULT_DELETE
-
-
-def save(host: str, name: str | None = None, delete: str | None = None) -> None:
+    The app's own results win, then the device-wide ones, then the defaults.
+    """
     data = _saved(host)
+    merged = {"method": DEFAULT, "delete": DEFAULT_DELETE, "chunk": False}
+    for layer in (data, (data.get("apps") or {}).get(app or "", {})):
+        if layer.get("method") in METHODS:
+            merged["method"] = layer["method"]
+        if layer.get("delete") in DELETES:
+            merged["delete"] = layer["delete"]
+        if isinstance(layer.get("chunk"), bool):
+            merged["chunk"] = layer["chunk"]
+    return merged
+
+
+def load(host: str, app: str | None = None) -> str:
+    return settings(host, app)["method"]
+
+
+def load_delete(host: str, app: str | None = None) -> str:
+    return settings(host, app)["delete"]
+
+
+def save(host: str, name: str | None = None, delete: str | None = None, app: str | None = None,
+         chunk: bool | None = None) -> None:
+    data = _saved(host)
+    layer = data.setdefault("apps", {}).setdefault(app, {}) if app else data
     if name:
-        data["method"] = name
+        layer["method"] = name
     if delete:
-        data["delete"] = delete
+        layer["delete"] = delete
+    if chunk is not None:
+        layer["chunk"] = chunk
     path = _path(host)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data))
+    path.write_text(json.dumps(data, indent=1))
 
+
+def app_name(app: str | None) -> str:
+    if not app:
+        return "this app"
+    return FRIENDLY.get(app, app)
+
+
+# --- typing -----------------------------------------------------------------------------------
 
 def remove(device, how: str, before: str, after: str) -> bool:
     """Delete from `before` down to `after` (a prefix of it) using deletion method `how`."""
@@ -92,8 +129,12 @@ def remove(device, how: str, before: str, after: str) -> bool:
     return device.gtv.ime_edit("", start=len(before), end=len(after))  # range-back
 
 
-def send(device, name: str, before: str, after: str, delete: str | None = None) -> bool:
-    """Change the box from `before` to `after` using method `name` (and `delete` to remove)."""
+def send(device, name: str, before: str, after: str, delete: str | None = None, chunk: bool = False) -> bool:
+    """Change the box from `before` to `after` using method `name` (and `delete` to remove).
+
+    With `chunk`, letters added together go in one edit instead of one edit per letter,
+    which is quicker in apps that refresh their results after every edit (like Netflix).
+    """
     what, cursor, offset, field = METHODS[name]
     same = 0
     while same < min(len(before), len(after)) and before[same] == after[same]:
@@ -113,9 +154,10 @@ def send(device, name: str, before: str, after: str, delete: str | None = None) 
                                      field_from_counter=field)
         return ok
     typed = after[:same]
-    for letter in added:  # one letter at a time
-        typed += letter
-        ok = device.gtv.ime_edit(letter, start=_cursor(cursor, letter, typed), counter_offset=offset,
+    pieces = [added] if chunk and added else list(added)
+    for piece in pieces:
+        typed += piece
+        ok = device.gtv.ime_edit(piece, start=_cursor(cursor, piece, typed), counter_offset=offset,
                                  field_from_counter=field) and ok
     return ok
 
@@ -128,48 +170,69 @@ def _cursor(kind: str, sent: str, box: str) -> int:
     return len(sent) - 1
 
 
-def run(device, ask=input, say=print) -> str | None:
-    """Try each method on the projector and keep the first that types "hi" correctly."""
+# --- the yes/no tests -------------------------------------------------------------------------
+
+def _foreground(device) -> str | None:
+    try:
+        return device.gtv.foreground()
+    except Exception:
+        return None
+
+
+def _open_keyboard(device, ask, say) -> str | None:
+    """Connect first, then have the keyboard opened, so the device is ready. Returns the app."""
+    try:
+        device.gtv.status()
+    except Exception as exc:  # shown, but the test can still try
+        say(f"(Couldn't reach the projector yet: {exc})")
+    ask("On the projector, open the search box you want to test (YouTube, Netflix or the home "
+        "screen's search) so its keyboard shows. Then press Enter here.")
+    app = _foreground(device)
+    say(f"Testing typing in {app_name(app)}.")
+    return app
+
+
+def _clear(ask) -> None:
+    ask("Clear the projector's search box with its own remote, then press Enter here.")
+
+
+def run(device, ask=input, say=print, app: str | None = None, opened: bool = False) -> str | None:
+    """Try each typing method and keep the first that types "hi" correctly (for the open app)."""
     say("Typing test.")
-    _open_keyboard(device, ask, say)
+    if not opened:
+        app = _open_keyboard(device, ask, say)
     for i, name in enumerate(METHODS, 1):
-        ask(f"\n[{i}/{len(METHODS)}] Clear the projector's search box (delete everything with its own remote),"
-            " then press Enter here.")
+        say(f"\n[{i}/{len(METHODS)}]")
+        _clear(ask)
         send(device, name, "", "h")
         time.sleep(1.0)
         send(device, name, "h", "hi")
         time.sleep(1.5)
         if _yes(ask, "Does the projector's box read exactly  hi  (two letters)?"):
-            save(device.s.host, name)
-            say(f"Saved: the remote will type this way ({name}).")
-            send(device, name, "hi", "h")
-            time.sleep(1.5)
-            if _yes(ask, "Now does it read just  h  (the i deleted)?"):
-                say("Deleting works too.")
-            else:
-                say("Typing works; deleting doesn't yet. Tell Claude: 'typing works, deleting doesn't'.")
+            save(device.s.host, name, app=app)
+            say(f"Saved for {app_name(app)}: typing works ({name}).")
             return name
-    say("None of them typed hi correctly. Tell Claude: 'typing test: none worked'.")
+    say(f"None of them typed hi correctly in {app_name(app)}. Tell Claude: 'typing test: none worked'.")
     return None
 
 
-def run_delete(device, ask=input, say=print) -> str | None:
-    """Try each way of deleting on the projector and keep the first that works (then check Clear)."""
+def run_delete(device, ask=input, say=print, app: str | None = None, opened: bool = False) -> str | None:
+    """Try each way of deleting and keep the first that works (then check Clear), for the open app."""
     host = device.s.host
-    method = load(host)
-    say(f"Typing method saved for this projector: {method}")
+    if not opened:
+        app = _open_keyboard(device, ask, say)
+    method = load(host, app)
+    say(f"Deleting test ({app_name(app)}, typing: {method}).")
     if METHODS[method][0] == "full":
         say("It sends the whole box, so deleting and Clear work the same way as typing. Nothing to test.")
         return None
-    say("Deleting test.")
-    _open_keyboard(device, ask, say)
-    ask("Clear the projector's search box with its own remote, then press Enter here.")
+    _clear(ask)
     send(device, method, "", "h")
     time.sleep(1.0)
     send(device, method, "h", "hi")
     time.sleep(1.5)
     if not _yes(ask, "Does the projector's box read  hi ?"):
-        say("Typing isn't working right; run the typing test again first:  samsung-tv gtv --ip <ip> typetest")
+        say("Typing isn't working right here; run the typing test again first.")
         return None
     for i, how in enumerate(DELETES, 1):
         say(f"\n[{i}/{len(DELETES)}] Deleting the last letter...")
@@ -177,26 +240,30 @@ def run_delete(device, ask=input, say=print) -> str | None:
         time.sleep(1.5)
         if not _yes(ask, "Did the last letter disappear (box reads  h )?"):
             continue
-        save(host, delete=how)
-        say(f"Saved: the remote will delete this way ({how}). Now checking Clear...")
+        save(host, delete=how, app=app)
+        say(f"Saved for {app_name(app)}: deleting works ({how}). Now checking Clear...")
         send(device, method, "h", "hi", how)
         time.sleep(1.5)
         remove(device, how, "hi", "")
         time.sleep(1.5)
         if _yes(ask, "Is the projector's box now empty?"):
-            say(f"Done. Typing: {method}. Deleting and Clear: {how}.")
+            say(f"Deleting and Clear work in {app_name(app)}.")
         else:
-            say(f"Done. Typing: {method}. Deleting: {how}, but Clear didn't empty the box. Tell Claude that.")
+            say(f"Deleting works but Clear didn't empty the box in {app_name(app)}. Tell Claude that.")
         return how
-    say(f"No way of deleting worked. Typing: {method}. Tell Claude: 'deleting test: none worked'.")
+    say(f"No way of deleting worked in {app_name(app)}. Tell Claude: 'deleting test: none worked'.")
     return None
 
 
-def run_fast(device, ask=input, say=print) -> bool:
-    """Type the way a phone does, letter by letter with no pauses, through the remote's own path."""
-    say(f"Fast typing test (typing: {load(device.s.host)}, deleting: {load_delete(device.s.host)}).")
-    _open_keyboard(device, ask, say)
-    ask("Clear the projector's search box with its own remote, then press Enter here.")
+def run_fast(device, ask=input, say=print, app: str | None = None, opened: bool = False) -> bool:
+    """Type like a phone does, through the remote's own path; then try quicker bursts of letters."""
+    host = device.s.host
+    if not opened:
+        app = _open_keyboard(device, ask, say)
+    chosen = settings(host, app)
+    say(f"Fast typing test ({app_name(app)}, typing: {chosen['method']}, deleting: {chosen['delete']}).")
+    save(host, app=app, chunk=False)
+    _clear(ask)
     device._typed = ""
     text = ""
     for letter in "mr beast":
@@ -210,19 +277,33 @@ def run_fast(device, ask=input, say=print) -> bool:
     device.type_text("")
     time.sleep(1.5)
     cleared = _yes(ask, "Is the box empty now?")
-    say("Fast test: typing " + ("OK" if typed else "WRONG") + ", deleting " + ("OK" if deleted else "WRONG")
-        + ", clear " + ("OK" if cleared else "WRONG") + ". Tell Claude this line.")
+
+    quick = False
+    if typed:
+        say("\nNow a quicker way: several letters in one go.")
+        _clear(ask)
+        save(host, app=app, chunk=True)
+        device._typed = ""
+        device.type_text("mr ")
+        device.type_text("mr beast")
+        time.sleep(1.5)
+        quick = _yes(ask, "Does the box read exactly  mr beast ?")
+        save(host, app=app, chunk=quick)
+        device.type_text("")
+        say("Quicker typing: " + ("on" if quick else "off (it stays letter by letter)") + f" for {app_name(app)}.")
+    say(f"Fast test in {app_name(app)}: typing " + ("OK" if typed else "WRONG") + ", deleting "
+        + ("OK" if deleted else "WRONG") + ", clear " + ("OK" if cleared else "WRONG")
+        + ", quicker " + ("OK" if quick else "no") + ". Tell Claude this line.")
     return typed and deleted and cleared
 
 
-def _open_keyboard(device, ask, say) -> None:
-    """Connect first, then have the keyboard opened, so its announcement reaches us."""
-    try:
-        device.gtv.status()
-    except Exception as exc:  # shown, but the test can still try
-        say(f"(Couldn't reach the projector yet: {exc})")
-    ask("On the projector, open YouTube's search. If its keyboard is already showing, press Back "
-        "and select the search box again so the keyboard pops up fresh. Then press Enter here.")
+def run_all(device, ask=input, say=print) -> None:
+    """The whole check for one app's search box: typing, deleting and Clear, then speed."""
+    app = _open_keyboard(device, ask, say)
+    if run(device, ask, say, app=app, opened=True) is None:
+        return
+    run_delete(device, ask, say, app=app, opened=True)
+    run_fast(device, ask, say, app=app, opened=True)
 
 
 def _yes(ask, question: str) -> bool:

@@ -284,6 +284,10 @@ class GoogleTV:
             self.press(["KEY_VOLUP" if steps > 0 else "KEY_VOLDOWN"] * min(abs(steps), 100), delay=0.15)
         return f"Volume set to {level}" + (f" (of {top})." if top else ".")
 
+    def app_now(self) -> str | None:
+        """The app in front as last reported, without waiting (None if not known yet)."""
+        return getattr(self._remote, "current_app", None) or None if self._remote else None
+
     def foreground(self) -> str | None:
         """The app in front, or None if this device doesn't report it."""
 
@@ -537,13 +541,14 @@ class Projector(GoogleTVDevice):
         from . import typing_methods
 
         text = text[:200]
-        method = typing_methods.load(self.s.host)
-        delete = typing_methods.load_delete(self.s.host)
+        # Each app's search box can want a different way of typing (see typing_methods).
+        app = self.gtv.app_now() if hasattr(self.gtv, "app_now") else None
+        chosen = typing_methods.settings(self.s.host, app)
         # Work from what the projector says its box reads, so a box changed or cleared with the
         # projector's own remote (or a new search box) doesn't throw the letters off.
         box = self.gtv.box_text() if hasattr(self.gtv, "box_text") else None
         before = box if box is not None else self._typed
-        typing_methods.send(self, method, before, text, delete)
+        typing_methods.send(self, chosen["method"], before, text, chosen["delete"], chosen["chunk"])
         self._typed = text
         return ""
 

@@ -564,6 +564,10 @@ NO_POWER = ("This projector's power can't be switched from its Google TV stick (
             "found no way). Use the projector's own remote for on and off; everything else works here.")
 
 
+NO_POWER_ON = ("The projector can be turned off from here but not on: while it's off, its Google TV "
+               "stick has no power, so nothing on the Wi-Fi can reach it. Turn it on with its own remote.")
+
+
 class Projector(GoogleTVDevice):
     """The Google TV device with the same methods the family remote calls on the Samsung TV."""
 
@@ -629,7 +633,7 @@ class Projector(GoogleTVDevice):
 
         name = power_methods.saved(self.s.host)["on"]
         if name == "none":
-            raise TVError(NO_POWER)
+            raise TVError(NO_POWER_ON if power_methods.saved(self.s.host)["off"] != "none" else NO_POWER)
         if name == power_methods.DEFAULT_ON:
             return self.gtv.wake()  # wake-up key, then power if it still reports off
         try:

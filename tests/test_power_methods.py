@@ -51,7 +51,7 @@ def test_says_so_when_it_drops_off_the_network(tmp_path, monkeypatch):
     g.send_key = send_key
     found = pm.run(Device(g), ask=lambda q: next(answers), say=lambda m: None)
     assert found == {"off": "sleep", "on": None}
-    assert pm.saved("10.0.0.8")["off"] == "sleep"
+    assert pm.saved("10.0.0.8") == {"off": "sleep", "on": "none"}
 
 
 def test_defaults():

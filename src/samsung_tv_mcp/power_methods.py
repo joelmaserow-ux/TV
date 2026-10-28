@@ -104,6 +104,8 @@ def run(device, ask=input, say=print) -> dict:
             say(f"Saved: on = {name}.")
             break
         ask("Leave it off (turn it off again with its own remote if it came on oddly), then press Enter.")
+    if not found["on"]:
+        save(host, on="none")  # the power button then says to use the projector's own remote
     say(f"\nPower test: off = {found['off'] or 'none'}, on = {found['on'] or 'none'}. Tell Claude this line.")
     return found
 

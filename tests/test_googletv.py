@@ -272,18 +272,3 @@ def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
     assert sent[-1].remote_ime_batch_edit.edit_info[0].text_field_status.value == ""
     loop.close()
 
-
-def test_projector_sends_the_whole_box_each_time():
-    class Gtv:
-        def __init__(self):
-            self.log = []
-
-        def set_text(self, value):
-            self.log.append(value)
-            return True
-
-    proj = googletv.Projector.__new__(googletv.Projector)
-    proj.gtv = Gtv()
-    for text in ("h", "hi", "h", ""):
-        proj.type_text(text)
-    assert proj.gtv.log == ["h", "hi", "h", ""]

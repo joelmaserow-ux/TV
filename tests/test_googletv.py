@@ -244,8 +244,8 @@ def test_projector_types_only_the_difference():
         proj.type_text(text)
     D = "KEY_BACKSPACE"
     assert proj.gtv.log == [
-        ("insert", "m"), ("insert", "r"), ("insert", " b"),
-        ("press", (D, D)), ("insert", "beast"),
+        ("insert", "m"), ("insert", "r"), ("insert", " "), ("insert", "b"),
+        ("press", (D, D)), *[("insert", ch) for ch in "beast"],
         ("press", (D,) * 7),
     ]
     proj.gtv.log.clear()

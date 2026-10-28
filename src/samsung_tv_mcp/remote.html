@@ -541,7 +541,7 @@
     });
     return typeQueue;
   }
-  $("typeText").addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(sendTyping, 150); });
+  $("typeText").addEventListener("input", () => sendTyping());  // every letter as it's typed
   $("typeText").addEventListener("focus", () => { typeWarned = false; });
   $("typeForm").addEventListener("submit", async (e) => {
     e.preventDefault();

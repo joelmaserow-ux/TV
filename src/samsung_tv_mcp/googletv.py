@@ -555,12 +555,13 @@ class Projector(GoogleTVDevice):
             self.press(["KEY_BACKSPACE"] * deletes, delay=0.05)
         added = text[same:]
         self._typed = old[:same]
-        if added:
-            if not self.gtv.set_text(added):
+        for letter in added:  # one letter per message, like pressing keys on its keyboard
+            if not self.gtv.set_text(letter):
                 raise TVError(
                     "The projector hasn't opened its keyboard for the remote yet. Select the search "
                     "box on the projector (so its keyboard shows), then type again."
                 )
+            self._typed += letter
         self._typed = text
         return ""
 

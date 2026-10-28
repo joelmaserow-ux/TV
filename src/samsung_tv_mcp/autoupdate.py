@@ -33,6 +33,18 @@ def installed() -> tuple[str, str, str] | None:
 
 
 def newest(repo: str, branch: str) -> str | None:
+    """The newest commit on the branch. Asks git first: it's signed in to GitHub on this
+    computer (that's how uv installed the remote), which a private repository needs."""
+    import subprocess
+
+    try:
+        out = subprocess.run(["git", "ls-remote", f"https://github.com/{repo}", f"refs/heads/{branch}"],
+                             capture_output=True, text=True, timeout=60,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout.split()
+        if out:
+            return out[0]
+    except (OSError, subprocess.SubprocessError):
+        pass
     req = urllib.request.Request(f"https://api.github.com/repos/{repo}/commits/{branch}",
                                  headers={"Accept": "application/vnd.github.sha", "User-Agent": "samsung-tv-mcp"})
     try:

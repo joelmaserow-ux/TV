@@ -230,9 +230,6 @@ def test_projector_types_only_the_difference():
         def __init__(self):
             self.log, self.box = [], 3
 
-        def keyboard_box(self):
-            return self.box
-
         def set_text(self, value):
             self.log.append(("insert", value))
             return True
@@ -252,6 +249,7 @@ def test_projector_types_only_the_difference():
         ("press", (D,) * 7),
     ]
     proj.gtv.log.clear()
-    proj.gtv.box = 4  # a new search box opened: nothing to delete from it
-    proj.type_text("rick")
-    assert proj.gtv.log == [("insert", "rick")]
+    proj.gtv.box = 4  # the projector renumbers its box after every edit; keep counting from what's typed
+    proj.type_text("r")
+    proj.type_text("ri")
+    assert proj.gtv.log == [("insert", "r"), ("insert", "i")]

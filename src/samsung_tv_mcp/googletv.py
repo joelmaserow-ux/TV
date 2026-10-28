@@ -172,12 +172,6 @@ class GoogleTV:
         self._run(go())
         return codes
 
-    def keyboard_box(self) -> int:
-        """The number of the text box the device last said is open (0 if none yet)."""
-        remote = self._remote
-        proto = getattr(remote, "_remote_message_protocol", None) if remote else None
-        return int(getattr(proto, "ime_field_counter", 0) or 0)
-
     def set_text(self, value: str) -> bool:
         """Insert `value` at the cursor of the open text box, like typing on the Google TV app.
 
@@ -505,12 +499,6 @@ class Projector(GoogleTVDevice):
         self.press(["KEY_MUTE"])
         return "Toggled mute."
 
-    def keyboard_box(self) -> int:
-        """The number of the text box the device last said is open (0 if none yet)."""
-        remote = self._remote
-        proto = getattr(remote, "_remote_message_protocol", None) if remote else None
-        return int(getattr(proto, "ime_field_counter", 0) or 0)
-
     def set_text(self, value: str) -> bool:
         """Insert `value` at the cursor of the open text box, like typing on the Google TV app.
 
@@ -540,18 +528,15 @@ class Projector(GoogleTVDevice):
         return self._run(go())
 
     _typed = ""  # what we've typed into the projector's open box so far
-    _box = 0
 
     def type_text(self, text: str) -> str:
         """Make the projector's open text box read `text`, sent live as the phone's box changes.
 
         The device only inserts text at its cursor, so send just the difference: Delete for
-        letters that went away, then the new letters.
+        letters that went away, then the new letters. (The box's number changes after every
+        edit, so it can't tell us when a different box opened; Clear starts afresh.)
         """
         text = text[:200]
-        box = self.gtv.keyboard_box()
-        if box != self._box:
-            self._box, self._typed = box, ""  # a different box is open: start from empty
         old = self._typed
         same = 0
         while same < min(len(old), len(text)) and old[same] == text[same]:

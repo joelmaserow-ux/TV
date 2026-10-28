@@ -240,3 +240,17 @@ def test_no_projector_configured(server):
     base, _ = server
     assert json.loads(post(base, {"action": "devices"})[1]["message"]) == ["tv"]
     assert "No projector" in post(base, {"action": "key", "keys": ["KEY_UP"], "device": "projector"})[1]["message"]
+
+
+def test_typing_goes_to_the_projector_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("SAMSUNG_TV_CONFIG_DIR", str(tmp_path))
+    tv, proj = FakeTV(), FakeProjector()
+    typed = []
+    proj.type_text = lambda text: typed.append(text) or ""
+    app = webremote.RemoteApp(tv, "1234", proj)
+    assert app.handle({"action": "type", "text": "rick", "device": "projector"}) == ""
+    assert typed == ["rick"]
+    with pytest.raises(webremote.TVError):
+        app.handle({"action": "type", "text": "rick"})
+    caps = json.loads(app.handle({"action": "capabilities", "device": "projector"}))
+    assert caps["typing"] is True

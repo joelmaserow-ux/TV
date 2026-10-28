@@ -191,3 +191,8 @@ def test_unlinked_youtube_picks_the_account_then_resends_the_video(tmp_path, mon
     fake.app = "com.google.android.youtube.tv"  # already open: no account picker
     dev.play_youtube("https://youtu.be/aqz-KE-bpKQ?t=30")
     assert fake.launched == [link + "&t=30s"] and fake.keys == []
+
+
+def test_typing_keys_map_to_android_delete_and_enter():
+    assert googletv.to_keycode("KEY_BACKSPACE") == "DEL"
+    assert googletv.to_keycode("KEY_TEXT_ENTER") == "ENTER"

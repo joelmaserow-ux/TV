@@ -232,6 +232,10 @@ class RemoteApp:
             case "job":
                 slot = self.slot(body)
                 return json.dumps({"busy": slot.job is not None, "last": slot.job_result})
+            case "type":
+                if not hasattr(dev, "type_text") or not projector:
+                    raise TVError("Typing only works on the projector; this TV ignores it.")
+                return dev.type_text(str(body.get("text", "")))
             case "youtube_link":
                 return dev.link_youtube(str(body["code"]))
             case "search":
@@ -258,7 +262,7 @@ class RemoteApp:
                     return json.dumps({
                         "unsupported": [], "found_apps": dev.apps(), "volume_max": dev.volume_max(),
                         "netflix_profiles": netflix.load(dev.s.host)["profiles"], "power_on": True,
-                        "youtube_linked": linked,
+                        "youtube_linked": linked, "typing": True,
                     })
                 data = keymap.load(self.tv.s.host)
                 return json.dumps({
@@ -269,6 +273,7 @@ class RemoteApp:
                     "volume_max": 100,
                     "power_on": False,
                     "youtube_linked": linked,
+                    "typing": False,
                 })
         raise ValueError(f"Unknown action {action!r}")
 

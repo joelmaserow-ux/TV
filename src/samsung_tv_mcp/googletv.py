@@ -28,6 +28,8 @@ KEYS = {
     "KEY_STOP": "MEDIA_STOP", "KEY_FF": "MEDIA_FAST_FORWARD", "KEY_REWIND": "MEDIA_REWIND",
     "KEY_CHUP": "CHANNEL_UP", "KEY_CHDOWN": "CHANNEL_DOWN", "KEY_POWER": "POWER",
     "KEY_OK": "DPAD_CENTER", "KEY_SELECT": "DPAD_CENTER", "KEY_BACK": "BACK",
+    # For typing: delete the last letter, and the keyboard's Enter / Search key.
+    "KEY_BACKSPACE": "DEL", "KEY_TEXT_ENTER": "ENTER",
     **{f"KEY_{n}": str(n) for n in range(10)},
 }
 
@@ -435,6 +437,13 @@ class Projector(GoogleTVDevice):
     def set_mute(self, mute: bool | None) -> str:
         self.press(["KEY_MUTE"])
         return "Toggled mute."
+
+    def type_text(self, text: str) -> str:
+        """Type into whatever text box is open on the projector, like the Google TV phone app."""
+        text = text[:200]
+        if text:
+            self.gtv.type_text(text)
+        return ""
 
     def power_off(self) -> str:
         return self.gtv.power(False)

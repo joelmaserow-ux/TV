@@ -201,6 +201,19 @@
       </div>
     </div>
 
+    <div id="typeCard" class="card hidden">
+      <form id="typeForm">
+        <input id="typeText" type="text" placeholder="Type onto the projector" aria-label="Text to type on the projector"
+          autocomplete="off" autocapitalize="off" enterkeyhint="send">
+        <button class="primary" type="submit">Send</button>
+      </form>
+      <div class="row" style="--cols:2;margin-top:8px">
+        <button class="small" data-keys="KEY_BACKSPACE" aria-label="Delete a letter">⌫ Delete</button>
+        <button class="small" data-keys="KEY_TEXT_ENTER">Search / Enter</button>
+      </div>
+      <p class="hint" style="margin-bottom:0">Open a search box on the projector first (so its keyboard shows), then type here.</p>
+    </div>
+
     <div class="card">
       <div class="row" style="--cols:4">
         <button class="small" data-keys="KEY_REWIND" aria-label="Rewind"><svg class="icon-svg"><use href="#i-rew"/></svg></button>
@@ -514,6 +527,13 @@
     const url = $("ytUrl").value.trim();
     if (url) { await playYouTube(url); $("ytUrl").value = ""; }
   });
+  $("typeForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("typeText").value;
+    if (!text) return;
+    const r = await call({ action: "type", text }, true);
+    if (r.ok) { $("typeText").value = ""; toast("Typed it"); }
+  });
   $("linkForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const code = $("linkCode").value.trim();
@@ -683,6 +703,7 @@
     $("volume").max = caps.volume_max || 100;
     stepSize = (caps.volume_max || 100) <= 30 ? 1 : 2;
     renderApps(caps.found_apps);
+    $("typeCard").classList.toggle("hidden", !caps.typing);
     const linked = caps.youtube_linked !== false;
     $("ytFix").open = !linked;
     $("ytFixTitle").textContent = linked ? "Fix YouTube ▾" : "Set up YouTube (once) ▾";

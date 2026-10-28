@@ -29,8 +29,9 @@ def _gtv(args) -> str:
         case "app" | "link":
             return "Opened " + gtv.launch(rest)
         case "type":
-            gtv.type_text(rest)
-            return "Typed."
+            if gtv.set_text(rest):
+                return "Typed."
+            return "Sent, but the device hasn't opened a keyboard: select a search box first."
         case "volume":
             return gtv.set_volume(int(rest))
         case "power":

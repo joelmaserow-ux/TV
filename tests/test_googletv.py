@@ -61,10 +61,9 @@ def gtv(tmp_path, monkeypatch):
 def test_commands(gtv):
     g, fake = gtv
     assert g.press(["KEY_UP", "ok"], delay=0) == ["DPAD_UP", "DPAD_CENTER"]
-    g.type_text("hi")
     assert g.launch("Disney Plus") == "Opened Disney Plus."
     assert g.launch("https://www.netflix.com/title/80014749") == "Opened https://www.netflix.com/title/80014749."
-    assert fake.sent == [("key", "DPAD_UP"), ("key", "DPAD_CENTER"), ("key", "H"), ("key", "I"),
+    assert fake.sent == [("key", "DPAD_UP"), ("key", "DPAD_CENTER"),
                          ("launch", "https://www.disneyplus.com"), ("launch", "https://www.netflix.com/title/80014749")]
     assert g.status()["device"] == "TOPTRO TP3"
 
@@ -198,9 +197,29 @@ def test_typing_keys_map_to_android_delete_and_enter():
     assert googletv.to_keycode("KEY_TEXT_ENTER") == "ENTER"
 
 
-def test_typing_presses_a_key_per_character(gtv):
+def test_keyboard_box_number_is_remembered_and_text_goes_there(gtv):
+    import asyncio
+
+    from androidtvremote2 import remote as rm
+    from androidtvremote2.remotemessage_pb2 import RemoteMessage
+
+    googletv._patch_keyboard_tracking()
+    loop = asyncio.new_event_loop()
+    proto = rm.RemoteProtocol(loop.create_future(), loop.create_future(), lambda *_: None, lambda *_: None,
+                              lambda *_: None, loop, True, False)
+    sent = []
+    proto._send_message = sent.append
+    show = RemoteMessage()
+    show.remote_ime_show_request.remote_text_field_status.counter_field = 7
+    proto._handle_message(show.SerializeToString())
+    assert proto.ime_field_counter == 7 and proto.keyboard_seen
+
     g, fake = gtv
-    assert g.type_text("Rick & Morty!") == "rick  morty"
-    keys = [code for kind, code in fake.sent if kind == "key"]
-    assert keys[:4] == ["R", "I", "C", "K"] and keys[4:6] == ["SPACE", "SPACE"] and len(keys) == 11
-    assert not any(kind == "text" for kind, _ in fake.sent)
+    fake._remote_message_protocol = proto
+    assert g.set_text("rick") is True
+    edit = sent[-1].remote_ime_batch_edit
+    assert edit.field_counter == 7 and edit.edit_info[0].text_field_status.value == "rick"
+    assert edit.edit_info[0].text_field_status.start == 3
+    g.set_text("")  # cleared on the phone: clear it on the projector too
+    assert sent[-1].remote_ime_batch_edit.edit_info[0].text_field_status.value == ""
+    loop.close()

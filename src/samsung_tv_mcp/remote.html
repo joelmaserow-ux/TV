@@ -203,15 +203,14 @@
 
     <div id="typeCard" class="card hidden">
       <form id="typeForm">
-        <input id="typeText" type="text" placeholder="Type onto the projector" aria-label="Text to type on the projector"
-          autocomplete="off" autocapitalize="off" enterkeyhint="send">
-        <button class="primary" type="submit">Send</button>
+        <input id="typeText" type="text" placeholder="Type here, it appears on the projector" aria-label="Type on the projector"
+          autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
       </form>
       <div class="row" style="--cols:2;margin-top:8px">
-        <button class="small" data-keys="KEY_BACKSPACE" aria-label="Delete a letter">⌫ Delete</button>
-        <button class="small" data-keys="KEY_TEXT_ENTER">Search / Enter</button>
+        <button class="small" type="button" id="typeClear">Clear</button>
+        <button class="small" type="button" id="typeEnter">Search / Enter</button>
       </div>
-      <p class="hint" style="margin-bottom:0">Open a search box on the projector first (so its keyboard shows), then type here.</p>
+      <p class="hint" style="margin-bottom:0">Select a search box on the projector first (so its keyboard shows). What you type here shows up there as you type.</p>
     </div>
 
     <div class="card">
@@ -370,7 +369,7 @@
       });
       const data = await res.json();
       if (res.status === 401) { lock(); return data; }
-      if (!data.ok) toast(data.message, true);
+      if (!data.ok && quiet !== "silent") toast(data.message, true);
       else if (!quiet) toast(data.message);
       return data;
     } catch (e) {
@@ -527,12 +526,34 @@
     const url = $("ytUrl").value.trim();
     if (url) { await playYouTube(url); $("ytUrl").value = ""; }
   });
+  // Live typing: send the whole box shortly after each change, so the projector's box follows it.
+  let typeTimer = null, typeSent = "", typeWarned = false;
+  async function sendTyping() {
+    clearTimeout(typeTimer);
+    const text = $("typeText").value;
+    if (text === typeSent) return;
+    typeSent = text;
+    const r = await call({ action: "type", text }, "silent");
+    if (!r.ok && !typeWarned) { typeWarned = true; toast(r.message, true); }
+    if (r.ok) typeWarned = false;
+  }
+  $("typeText").addEventListener("input", () => { clearTimeout(typeTimer); typeTimer = setTimeout(sendTyping, 150); });
+  $("typeText").addEventListener("focus", () => { typeWarned = false; });
   $("typeForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const text = $("typeText").value;
-    if (!text) return;
-    const r = await call({ action: "type", text }, true);
-    if (r.ok) { $("typeText").value = ""; toast("Typed it"); }
+    await sendTyping();
+    call({ action: "key", keys: ["KEY_TEXT_ENTER"] }, true);
+  });
+  $("typeEnter").addEventListener("click", async (ev) => {
+    ev.stopPropagation(); buzz();
+    await sendTyping();
+    call({ action: "key", keys: ["KEY_TEXT_ENTER"] }, true);
+  });
+  $("typeClear").addEventListener("click", (ev) => {
+    ev.stopPropagation(); buzz();
+    $("typeText").value = "";
+    sendTyping();
+    $("typeText").focus();
   });
   $("linkForm").addEventListener("submit", async (e) => {
     e.preventDefault();

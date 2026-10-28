@@ -90,6 +90,7 @@ class GoogleTV:
             raise TVError("Google TV control needs the 'androidtvremote2' package. Reinstall this project.") from exc
         cert, key = _files(self.host)
         cert.parent.mkdir(parents=True, exist_ok=True)
+        _patch_keyboard_tracking()
         return AndroidTVRemote(CLIENT_NAME, str(cert), str(key), self.host, loop=self._loop)
 
     # --- pairing ----------------------------------------------------------------------------
@@ -171,29 +172,34 @@ class GoogleTV:
         self._run(go())
         return codes
 
-    def type_text(self, text: str) -> str:
-        """Type `text` into the focused text box, one key press per character.
+    def set_text(self, value: str) -> bool:
+        """Make the open text box on the screen read `value`, like typing on the Google TV app.
 
-        The protocol's "phone keyboard" text message only lands when the device has told us a
-        text box is open, which the TP3 doesn't, so press the keys like a USB keyboard would.
-        Search boxes don't care about capitals; characters with no key are left out.
+        Sends the whole box each time, so it can follow a phone's text box letter by letter
+        (deleting included). Returns whether the device has said a keyboard is open.
         """
-        codes = text_keycodes(text)
+        from androidtvremote2.remotemessage_pb2 import (
+            RemoteEditInfo, RemoteImeBatchEdit, RemoteImeObject, RemoteMessage,
+        )
+
+        value = value[:200]
 
         async def go():
-            for code in codes:
-                await self._do(lambda r, c=code: r.send_key_command(c))
-                await asyncio.sleep(0.05)
+            remote = await self._connected()
+            proto = remote._remote_message_protocol
+            if proto is None:
+                raise TVUnreachable(f"Lost the connection to the Google TV at {self.host}.")
+            msg = RemoteMessage()
+            end = len(value) - 1
+            msg.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
+                ime_counter=getattr(proto, "ime_counter", 0),
+                field_counter=getattr(proto, "ime_field_counter", 0),
+                edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=end, end=end, value=value))],
+            ))
+            proto._send_message(msg)
+            return bool(getattr(proto, "keyboard_seen", False))
 
-        self._run_long(go(), 2 + len(codes) * 0.2)
-        return "".join(ch for ch in text.lower() if ch in TEXT_KEYS)
-
-    def _run_long(self, coro, timeout: float):
-        saved, self.timeout = self.timeout, max(self.timeout, timeout)
-        try:
-            return self._run(coro)
-        finally:
-            self.timeout = saved
+        return self._run(go())
 
     def launch(self, app_or_link: str) -> str:
         """Open an app by friendly name or package, or a deep link (https://, market://...).
@@ -298,15 +304,39 @@ class GoogleTV:
             self._remote = None
 
 
-# Characters that can be typed with a key press, and their Android key names.
-TEXT_KEYS = {
-    **{ch: ch.upper() for ch in "abcdefghijklmnopqrstuvwxyz0123456789"},
-    " ": "SPACE", ".": "PERIOD", ",": "COMMA", "-": "MINUS", "'": "APOSTROPHE", "@": "AT", "/": "SLASH",
-}
+def _patch_keyboard_tracking() -> None:
+    """Remember the text box the device says is open.
 
+    When a keyboard opens, the device sends "show keyboard" with the box's number, and text
+    must be addressed to that number. androidtvremote2 only reads it from a different message
+    that some devices (like the TP3) never send, so its text went to box 0 and was dropped.
+    """
+    from androidtvremote2 import remote as rm
+    from androidtvremote2.remotemessage_pb2 import RemoteMessage
 
-def text_keycodes(text: str) -> list[str]:
-    return [TEXT_KEYS[ch] for ch in text.lower() if ch in TEXT_KEYS]
+    if getattr(rm.RemoteProtocol, "_keyboard_tracking", False):
+        return
+    original = rm.RemoteProtocol._handle_message
+
+    def handle(self, raw_msg):
+        original(self, raw_msg)
+        try:
+            msg = RemoteMessage()
+            msg.ParseFromString(raw_msg)
+        except Exception:
+            return
+        if msg.HasField("remote_ime_show_request"):
+            box = msg.remote_ime_show_request.remote_text_field_status
+            if box.counter_field:
+                self.ime_field_counter = box.counter_field
+            if not getattr(self, "keyboard_seen", False):
+                print(f"Projector keyboard is open (box {box.counter_field}); typing will go there.", flush=True)
+            self.keyboard_seen = True
+        elif msg.HasField("remote_ime_batch_edit"):
+            self.keyboard_seen = True
+
+    rm.RemoteProtocol._handle_message = handle
+    rm.RemoteProtocol._keyboard_tracking = True
 
 
 def to_keycode(key: str) -> str:
@@ -470,14 +500,42 @@ class Projector(GoogleTVDevice):
         self.press(["KEY_MUTE"])
         return "Toggled mute."
 
+    def set_text(self, value: str) -> bool:
+        """Make the open text box on the screen read `value`, like typing on the Google TV app.
+
+        Sends the whole box each time, so it can follow a phone's text box letter by letter
+        (deleting included). Returns whether the device has said a keyboard is open.
+        """
+        from androidtvremote2.remotemessage_pb2 import (
+            RemoteEditInfo, RemoteImeBatchEdit, RemoteImeObject, RemoteMessage,
+        )
+
+        value = value[:200]
+
+        async def go():
+            remote = await self._connected()
+            proto = remote._remote_message_protocol
+            if proto is None:
+                raise TVUnreachable(f"Lost the connection to the Google TV at {self.host}.")
+            msg = RemoteMessage()
+            end = len(value) - 1
+            msg.remote_ime_batch_edit.CopyFrom(RemoteImeBatchEdit(
+                ime_counter=getattr(proto, "ime_counter", 0),
+                field_counter=getattr(proto, "ime_field_counter", 0),
+                edit_info=[RemoteEditInfo(insert=1, text_field_status=RemoteImeObject(start=end, end=end, value=value))],
+            ))
+            proto._send_message(msg)
+            return bool(getattr(proto, "keyboard_seen", False))
+
+        return self._run(go())
+
     def type_text(self, text: str) -> str:
-        """Type into whatever text box is open on the projector, like the Google TV phone app."""
-        text = text[:200]
-        if not text.strip():
-            return ""
-        typed = self.gtv.type_text(text)
-        if not typed:
-            raise TVError("Only letters, numbers and simple punctuation can be typed.")
+        """Make the open text box on the projector read `text` (sent live as you type)."""
+        if not self.gtv.set_text(text[:200]):
+            raise TVError(
+                "The projector hasn't opened its keyboard for the remote yet. Select the search box "
+                "on the projector (so its keyboard shows), then type again."
+            )
         return ""
 
     def power_off(self) -> str:

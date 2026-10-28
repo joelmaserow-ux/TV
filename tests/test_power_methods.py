@@ -28,12 +28,13 @@ def _quiet(monkeypatch, tmp_path):
 def test_finds_and_saves_off_then_on(tmp_path, monkeypatch):
     _quiet(monkeypatch, tmp_path)
     g = Gtv()
-    # sleep: no; power: no; power-hold: yes (off). On: wakeup no, power yes.
-    answers = iter(["", "n", "", "n", "", "y", "n", "", "y"])
+    # sleep: no; power: yes (off). On: wakeup no, power yes.
+    answers = iter(["", "n", "", "y", "n", "", "y"])
     found = pm.run(Device(g), ask=lambda q: next(answers), say=lambda m: None)
-    assert found == {"off": "power-hold", "on": "power"}
-    assert g.sent == [("SLEEP", False), ("POWER", False), ("POWER", True), ("WAKEUP", False), ("POWER", False)]
-    assert pm.saved("10.0.0.8") == {"off": "power-hold", "on": "power"}
+    assert found == {"off": "power", "on": "power"}
+    assert g.sent == [("SLEEP", False), ("POWER", False), ("WAKEUP", False), ("POWER", False)]
+    assert pm.saved("10.0.0.8") == {"off": "power", "on": "power"}
+    assert not any(hold for _, hold in g.sent)  # never a held key (that shuts Android down)
 
 
 def test_says_so_when_it_drops_off_the_network(tmp_path, monkeypatch):

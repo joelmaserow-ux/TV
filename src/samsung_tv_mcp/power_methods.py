@@ -14,18 +14,17 @@ from .encrypted import credentials_path
 from .legacy import TVError
 
 # name -> (Android key, long press?)
+# Never a held power key: on Android that's "shut down", which fully powers the stick off
+# (on the TP3 it then sits on "GTV loading" while it starts again).
 OFF = {
     "sleep": ("SLEEP", False),
     "power": ("POWER", False),
-    "power-hold": ("POWER", True),
     "tv-power": ("TV_POWER", False),
-    "tv-power-hold": ("TV_POWER", True),
 }
 ON = {
     "wakeup": ("WAKEUP", False),
     "power": ("POWER", False),
     "tv-power": ("TV_POWER", False),
-    "power-hold": ("POWER", True),
 }
 DEFAULT_OFF = "power"
 DEFAULT_ON = "wakeup"

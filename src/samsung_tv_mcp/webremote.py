@@ -80,10 +80,10 @@ class RemoteApp:
 
     def handle(self, body: dict) -> str:
         action = body.get("action")
-        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes", "devices"):
+        if self.job is not None and action not in ("status", "get_volume", "capabilities", "job", "search", "netflix_find", "netflix_episodes", "devices", "channels", "channel_videos"):
             raise TVError(f"Busy: {self.job}. Wait for it to finish.")
         # These don't press keys, so they never wait behind a long job holding the lock.
-        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find", "netflix_episodes", "devices"):
+        if action in ("netflix_watch", "job", "status", "get_volume", "capabilities", "search", "netflix_find", "netflix_episodes", "devices", "channels", "channel_videos"):
             return self._handle(body)
         with self.lock:
             return self._handle(body)
@@ -134,6 +134,12 @@ class RemoteApp:
             case "search":
                 from .youtube_search import search
                 return json.dumps(search(str(body.get("query", ""))[:200]))
+            case "channels":
+                from .youtube_search import search_channels
+                return json.dumps(search_channels(str(body.get("query", ""))[:200]))
+            case "channel_videos":
+                from .youtube_search import channel_videos
+                return json.dumps(channel_videos(str(body.get("channel", ""))[:40]))
             case "status":
                 return dev.status()
             case "on":

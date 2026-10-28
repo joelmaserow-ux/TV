@@ -84,6 +84,8 @@
   .t { font-weight: 650; font-size: 15px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden; }
   .m { color: var(--muted); font-size: 13px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .result.channel img { width: 56px; height: 56px; border-radius: 50%; justify-self: center; }
+  .label { color: var(--muted); font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; margin: 8px 6px 0; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
 
@@ -453,16 +455,58 @@
     $("searchText").blur();
     const box = $("results");
     note(box, "Searching…");
-    const r = await call({ action: "search", query: q }, true);
+    // Channels are a nice extra: a failed channel search mustn't hide the videos.
+    const [r, c] = await Promise.all([
+      call({ action: "search", query: q }, true),
+      call({ action: "channels", query: q }, true).catch(() => ({})),
+    ]);
     const items = (r.ok && json(r)) || [];
-    if (!items.length) { note(box, r.ok ? "No videos found." : ""); return; }
-    box.innerHTML = "";
+    const channels = (c && c.ok && json(c)) || [];
+    if (!items.length && !channels.length) { note(box, r.ok ? "No videos found." : ""); return; }
+    lastSearch = { items, channels };
+    showSearch();
+  });
+  let lastSearch = null;
+  function label(text) { const p = document.createElement("div"); p.className = "label"; p.textContent = text; return p; }
+  function videoRows(box, items) {
     for (const v of items) {
       box.append(row({ title: v.title, meta: [v.channel, v.duration].filter(Boolean).join(" · "),
         img: "https://i.ytimg.com/vi/" + encodeURIComponent(v.id) + "/mqdefault.jpg",
         onPick: () => playYouTube("https://youtu.be/" + v.id) }));
     }
-  });
+  }
+  function showSearch() {
+    const box = $("results");
+    box.innerHTML = "";
+    const { items, channels } = lastSearch;
+    if (channels.length) {
+      box.append(label("Channels"));
+      for (const ch of channels) {
+        const b = row({ title: ch.name, meta: ch.subscribers || "Channel", img: ch.thumbnail,
+          onPick: () => openChannel(ch) });
+        b.classList.add("channel");
+        box.append(b);
+      }
+      if (items.length) box.append(label("Videos"));
+    }
+    videoRows(box, items);
+  }
+  async function openChannel(ch) {
+    const box = $("results");
+    box.innerHTML = "";
+    const back = document.createElement("button");
+    back.type = "button"; back.className = "small"; back.textContent = "← Back to results";
+    back.addEventListener("click", (ev) => { ev.stopPropagation(); showSearch(); });
+    box.append(back, label(ch.name + " · latest videos"));
+    const wait = document.createElement("p"); wait.className = "hint"; wait.textContent = "Loading videos…";
+    box.append(wait);
+    const r = await call({ action: "channel_videos", channel: ch.id }, true);
+    wait.remove();
+    const items = (r.ok && json(r)) || [];
+    if (!items.length) { box.append(label(r.ok ? "No videos found." : "Couldn't load this channel.")); return; }
+    videoRows(box, items);
+    box.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
   $("ytForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const url = $("ytUrl").value.trim();

@@ -100,10 +100,26 @@ def is_online(host: str) -> bool:
     return _run(_is_online(host))
 
 
+async def _refresh(api, host: str) -> None:
+    """Swap the stored link for a fresh token and save it.
+
+    The link itself (the TV's screen id) never expires; only the short-lived token that goes
+    with it does, and YouTube hands out a new one for the screen id on request. Saving it keeps
+    the file current. The link only breaks if the TV's YouTube app is reset or its linked
+    devices are removed.
+    """
+    path = _auth_path(host)
+    api.load_auth_state(json.loads(path.read_text()))
+    await api.refresh_auth()
+    try:
+        path.write_text(json.dumps(api.store_auth_state()))
+    except OSError:
+        pass  # the old file still holds the screen id, which is all a refresh needs
+
+
 async def _is_online(host: str) -> bool:
     async with _api() as api:
-        api.load_auth_state(json.loads(_auth_path(host).read_text()))
-        await api.refresh_auth()
+        await _refresh(api, host)
         return await api.is_available()
 
 
@@ -125,8 +141,7 @@ async def _play(host: str, video_id: str, start: int | None, attempts: int = 4) 
     # just stop using expire on YouTube's side without touching playback.
     listener = _NowPlaying()
     async with _api(listener) as api:
-        api.load_auth_state(json.loads(_auth_path(host).read_text()))
-        await api.refresh_auth()
+        await _refresh(api, host)
         for attempt in range(attempts + 1):
             listener.reset()
             await _connect(api)

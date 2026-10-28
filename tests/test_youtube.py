@@ -142,3 +142,10 @@ def test_fresh_youtube_presses_ok_on_account_picker(fake_api, monkeypatch):
     monkeypatch.setattr(youtube, "is_online", lambda host: "KEY_ENTER" in pressed)
     tv._ensure_youtube_open()
     assert pressed == ["KEY_ENTER"]
+
+
+def test_each_play_saves_the_refreshed_link(fake_api, tmp_path, monkeypatch):
+    youtube.link("1.2.3.4", "123456789012")
+    monkeypatch.setattr(fake_api, "store_auth_state", lambda self: {"version": 1, "screenId": "abc", "loungeIdToken": "new"})
+    youtube.play("1.2.3.4", "jNQXAC9IVRw")
+    assert json.loads((tmp_path / "1.2.3.4.youtube.json").read_text())["loungeIdToken"] == "new"

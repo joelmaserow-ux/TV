@@ -145,6 +145,9 @@ def test_volume_works_alongside_netflix_and_a_new_command_replaces_it(server, mo
     # Volume answers straight away and doesn't stop Netflix.
     assert post(base, {"action": "step", "steps": 1})[1] == {"ok": True, "message": "Volume +1."}
     assert post(base, {"action": "key", "keys": ["KEY_VOLUP"]})[1]["ok"]
+    # Other buttons are paused, not sent, and don't stop it.
+    reply = post(base, {"action": "key", "keys": ["KEY_UP"]})[1]
+    assert not reply["ok"] and "paused" in reply["message"] and "KEY_UP" not in tv.remote.sent
     assert _job(base)["busy"] is True
     # A YouTube video is a new command: Netflix stops and the video plays.
     assert post(base, {"action": "youtube", "url": "https://youtu.be/aqz-KE-bpKQ"})[1]["message"] == "Playing it."
@@ -165,8 +168,10 @@ def test_a_second_netflix_request_replaces_the_first(server, monkeypatch):
     assert _job(base)["busy"] is True
     import samsung_tv_mcp.netflix as nf
     monkeypatch.setattr(nf, "watch", lambda *a, **k: "done")
-    post(base, {"action": "key", "keys": ["KEY_HOME"]})  # take over, which stops the second one too
+    tv.play_youtube = lambda url: "Playing it."
+    post(base, {"action": "youtube", "url": "https://youtu.be/aqz-KE-bpKQ"})  # stops the second one too
     assert _wait_until(lambda: not _job(base)["busy"])
+    assert post(base, {"action": "key", "keys": ["KEY_UP"]})[1]["ok"]  # buttons work again
 
 
 def test_netflix_watch_passes_season_and_episode(server, monkeypatch):
@@ -222,9 +227,10 @@ def test_device_switch_routes_to_projector(tmp_path, monkeypatch):
         # A command for the TV doesn't stop what the projector is doing.
         _slow_netflix(monkeypatch)
         post(base, {"action": "netflix_watch", "profile": "Ben", "show": "rick", "device": "projector"})
-        post(base, {"action": "key", "keys": ["KEY_HOME"]})
+        assert post(base, {"action": "key", "keys": ["KEY_HOME"]})[1]["ok"]  # the TV isn't paused
         assert _job(base, "projector")["busy"] is True and _job(base)["busy"] is False
-        post(base, {"action": "key", "keys": ["KEY_HOME"], "device": "projector"})
+        proj.open_app = lambda name: f"Opened {name}."
+        post(base, {"action": "app", "name": "Disney+", "device": "projector"})
         assert _wait_until(lambda: not _job(base, "projector")["busy"])
     finally:
         httpd.shutdown()

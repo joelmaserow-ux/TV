@@ -31,6 +31,9 @@ PASSIVE = {"status", "get_volume", "capabilities", "job", "search", "netflix_fin
 # Volume works alongside whatever is running, without stopping it.
 VOLUME = {"volume", "step", "mute"}
 VOLUME_KEYS = {"KEY_VOLUP", "KEY_VOLDOWN", "KEY_MUTE"}
+# Asking to watch something else (or turning the device off) replaces what's running.
+# Other buttons are paused while a routine runs, so stray presses can't throw it off.
+OVERRIDE = {"youtube", "app", "netflix_watch", "off", "on"}
 STOPPED = "Stopped: something newer was asked for."
 
 
@@ -42,17 +45,22 @@ class _Slot:
         self.press_lock = threading.Lock()  # single key presses, so they never overlap
         self.state = threading.Lock()
         self.current: threading.Event | None = None
+        self.label = ""  # what the running command is doing, for the "paused" message
         self.job: str | None = None  # label of the background routine, for the busy banner
         self.job_result: dict | None = None
 
-    def take_over(self) -> threading.Event:
+    def take_over(self, label: str) -> threading.Event:
         """Stop whatever is running on this device; the returned event belongs to the new command."""
         event = threading.Event()
         with self.state:
             if self.current is not None:
                 self.current.set()
-            self.current = event
+            self.current, self.label = event, label
         return event
+
+    def running(self) -> str | None:
+        with self.state:
+            return self.label if self.current is not None else None
 
     def finish(self, event: threading.Event) -> None:
         with self.state:
@@ -120,7 +128,7 @@ class RemoteApp:
         It replaces whatever that device was doing, and is itself replaced by the next command.
         """
         slot = slot or self.slots["tv"]
-        event = slot.take_over()
+        event = slot.take_over(label)
         slot.job, slot.job_result = label, None
         dev = _Guarded(device or self.tv, slot)
 
@@ -140,7 +148,7 @@ class RemoteApp:
                 print(f"{time.strftime('%H:%M:%S')}  {label} -> {slot.job_result['message']}", flush=True)
 
         threading.Thread(target=run, daemon=True).start()
-        return f"{label}… this takes 1–2 minutes. Tap anything else to stop it."
+        return f"{label}… this takes 1–2 minutes. Buttons pause meanwhile; playing something else stops it."
 
     def handle(self, body: dict) -> str:
         action = body.get("action")
@@ -153,8 +161,16 @@ class RemoteApp:
                 return self._handle(body)
         if action == "netflix_watch":
             return self._handle(body)  # starts its own background job, which takes over
-        # Anything else is a new command: stop what's running on this device and do this instead.
-        event = slot.take_over()
+        if action not in OVERRIDE:
+            busy = slot.running()
+            if busy:
+                raise TVError(f"Busy: {busy}. Buttons are paused until it's done (volume still works).")
+            with slot.lock:
+                return self._handle(body)
+        # Watching something else: stop what's running on this device and do this instead.
+        labels = {"youtube": "Playing a YouTube video", "app": f"Opening {body.get('name', 'an app')}",
+                  "off": "Turning off", "on": "Turning on"}
+        event = slot.take_over(labels[action])
         slot.job = None
         try:
             with slot.lock, cancel.scope(event):

@@ -75,3 +75,18 @@ def test_no_way_found_makes_the_power_button_explain(tmp_path, monkeypatch):
         with pytest.raises(TVError, match="own remote"):
             action()
     assert len(g.sent) == sent  # nothing sent: no more restarting the stick
+
+
+def test_turning_off_confirms_the_shut_down_question(tmp_path, monkeypatch):
+    import time
+
+    from samsung_tv_mcp import googletv
+
+    _quiet(monkeypatch, tmp_path)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    g = Gtv()
+    proj = googletv.Projector.__new__(googletv.Projector)
+    proj.gtv, proj.s = g, type("S", (), {"host": "10.0.0.8"})()
+    pm.save("10.0.0.8", off="power", on="none")
+    proj.power_off()
+    assert g.sent == [("POWER", False), ("DPAD_CENTER", False)]  # power, then OK on "shut down?"

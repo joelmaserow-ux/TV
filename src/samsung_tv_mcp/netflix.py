@@ -131,11 +131,12 @@ def _fully_exit(tv, wait: float, attempts: int = 3) -> None:
     reports_state = _wait_for_state(tv, "running", 30)
     cancel.sleep(wait)
     steps = layout(tv)["exit"]
+    gap = float(layout(tv).get("exit_gap", 0.6))  # between presses within a step
     for _ in range(attempts):
         for keys, pause in steps:
             for i, key in enumerate(keys):
                 if i:
-                    cancel.sleep(0.6)
+                    cancel.sleep(gap)
                 tv.press([key])
             if pause:
                 cancel.sleep(pause)

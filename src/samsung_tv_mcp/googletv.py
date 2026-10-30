@@ -470,14 +470,16 @@ class GoogleTVDevice:
         # Settings, OK, Down 4, Right, Down, OK (Netflix's app info), Down, OK (Force stop),
         # OK (confirm). Each step is (presses, seconds to wait after them).
         "exit": [
-            (["KEY_MENU"], 2.0),
+            (["KEY_MENU"], 2.5),
+            (["KEY_ENTER"], 3.0),
+            (["KEY_DOWN"] * 4 + ["KEY_RIGHT", "KEY_DOWN"], 1.5),
+            (["KEY_ENTER"], 3.5),
+            (["KEY_DOWN"], 1.5),
             (["KEY_ENTER"], 2.0),
-            (["KEY_DOWN"] * 4 + ["KEY_RIGHT", "KEY_DOWN"], 0.5),
             (["KEY_ENTER"], 2.5),
-            (["KEY_DOWN"], 0.5),
-            (["KEY_ENTER"], 1.5),
-            (["KEY_ENTER"], 2.0),
         ],
+        # Presses sent closer together than this were sometimes missed in the Settings panel.
+        "exit_gap": 1.2,
         # After picking a profile: Up, Left, OK lands on "a" of the search keyboard. Left
         # slides the side menu open, and an OK sent before it settles is ignored, so wait.
         "to_search": [(["KEY_UP"], 1.0), (["KEY_LEFT"], 2.0), (["KEY_ENTER"], 0.8)],
@@ -626,6 +628,14 @@ class Projector(GoogleTVDevice):
         if name == "none":
             raise TVError(NO_POWER)
         power_methods.send(self.gtv, power_methods.OFF, name)
+        # The TP3 asks "Would you like to shut down?"; OK confirms it.
+        import time
+
+        time.sleep(2.0)
+        try:
+            self.gtv.send_key("DPAD_CENTER")
+        except TVError:
+            pass  # already off
         return "Turned the projector off."
 
     def power_on(self) -> str:
